@@ -156,7 +156,7 @@
         // straighten and crop it exactly using the corners Gemini found, else trim plain borders
         const ok = Array.isArray(info?.corners) && info.corners.length === 4 && info.corners.every((p) => p?.length === 2);
         // a graded card keeps its whole case and label: measure the slab's shape from the photo
-        slab = !!(info?.slab && ok);
+        slab = !!((info?.slab || info?.grading?.company) && ok); // a grade label means it is in a slab
         const ratio = slab ? null : /yu-?gi-?oh/i.test(info?.game || '') ? 59 / 86 : 63 / 88;
         const card = ok ? P.straighten(img, info.corners, ratio) : P.cropCard(img);
         // Gemini outlines the character; it's cut from the card's own pixels (nothing redrawn)

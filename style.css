@@ -5,81 +5,17 @@ body {
   color: #eee;
   font-family: system-ui, sans-serif;
   overflow: hidden;
-  touch-action: none;
   -webkit-user-select: none;
   user-select: none;
 }
 
 .stage {
   height: calc(100svh - 70px);
-  display: grid;
-  place-items: center;
-  perspective: 900px;
+  touch-action: none; /* finger drags spin the card instead of scrolling */
+  cursor: grab;
 }
-
-/* --tx/--ty: tilt in degrees; --px/--py: tilt -1..1 (set by app.js) */
-.card {
-  --tx: 0deg; --ty: 0deg; --px: 0; --py: 0;
-  position: relative;
-  width: min(80vw, 420px, calc((100svh - 130px) * 0.72));
-  transform: rotateX(var(--ty)) rotateY(var(--tx));
-  transform-style: preserve-3d;
-  transition: opacity .25s;
-}
-.card.swap { opacity: 0; }
-
-.face {
-  position: relative; overflow: hidden;
-  border-radius: 4.6% / 3.4%;
-  isolation: isolate; /* blend modes below don't apply inside the 3D card without this */
-  box-shadow: 0 30px 60px -20px rgba(0,0,0,.85);
-}
-.art { display: block; width: 100%; filter: url(#splitArt) saturate(1.1); }
-
-/* rainbow foil band that slides as the card tilts */
-.holo {
-  position: absolute; inset: 0;
-  background: linear-gradient(115deg,
-    transparent 40%, #ff4fd0 44%, #ffe94f 47%, #4fff9a 50%, #4fc3ff 53%, #a84fff 56%, transparent 60%);
-  background-size: 250% 250%;
-  background-position: calc(50% + var(--px) * 60%) calc(50% + var(--py) * 60%);
-  mix-blend-mode: soft-light;
-  opacity: .7;
-}
-.sparkles { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.glare {
-  position: absolute; inset: 0;
-  background: radial-gradient(circle at calc(50% + var(--px) * 45%) calc(45% + var(--py) * 45%),
-    rgba(255,255,255,.35), rgba(255,255,255,0) 50%);
-  mix-blend-mode: overlay;
-}
-
-/* fine vertical RGB stripes, like a lenticular print; they slide as the card tilts */
-.stripes {
-  position: absolute; inset: 0; pointer-events: none;
-  background: repeating-linear-gradient(90deg,
-    rgba(255,0,40,.07) 0 1px, rgba(0,255,80,.06) 1px 2px, rgba(0,60,255,.07) 2px 3px, rgba(0,0,0,.28) 3px 4px);
-  background-position: calc(var(--px) * 9px) 0;
-}
-
-/* the character, floating in front of the card */
-.pop {
-  position: absolute; display: none; pointer-events: none;
-  transform: translateZ(70px);
-}
-.pop.on { display: block; }
-.pop .float { position: relative; width: 100%; height: 100%; }
-.pop.bob .float { animation: bob 3.4s ease-in-out infinite; }
-.pop img {
-  display: block; width: 100%; height: 100%;
-  filter: url(#splitPop) drop-shadow(calc(var(--px) * -10px + 4px) calc(var(--py) * -10px + 10px) 7px rgba(0,0,0,.55));
-}
-/* stripes only where the character is */
-.pop .stripes {
-  -webkit-mask: var(--pop-src) center / 100% 100% no-repeat;
-          mask: var(--pop-src) center / 100% 100% no-repeat;
-}
-@keyframes bob { 50% { transform: translateY(-2%) rotate(-.8deg); } }
+.stage:active { cursor: grabbing; }
+.stage canvas { display: block; }
 
 .controls {
   height: 70px; display: flex; align-items: center; justify-content: center; gap: 18px;
@@ -93,7 +29,3 @@ body {
 .dots i { width: 8px; height: 8px; border-radius: 50%; background: #555; }
 .dots i.on { background: #eee; }
 .motion { position: fixed; top: calc(12px + env(safe-area-inset-top)); right: 12px; }
-
-@media (prefers-reduced-motion: reduce) {
-  .pop.bob .float { animation: none; }
-}

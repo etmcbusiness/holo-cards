@@ -7,45 +7,16 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main class="stage" id="stage">
-    <div class="card" id="card">
-      <div class="face">
-        <img class="art" id="art" alt="">
-        <div class="holo"></div>
-        <canvas class="sparkles" id="sparkles"></canvas>
-        <div class="glare"></div>
-        <div class="stripes"></div>
-      </div>
-      <div class="pop" id="pop"><div class="float"><img id="popImg" alt=""><div class="stripes"></div></div></div>
-    </div>
-  </main>
+  <main class="stage" id="stage"></main>
 
-  <nav class="controls">
+  <nav class="controls" id="controls">
     <button id="prev" aria-label="Previous card">◀</button>
     <span id="dots" class="dots"></span>
     <button id="next" aria-label="Next card">▶</button>
   </nav>
   <button id="motion" class="motion" hidden>Tilt with phone</button>
 
-  <svg width="0" height="0" aria-hidden="true">
-    <!-- red/cyan split; app.js widens it as the card tilts -->
-    <filter id="splitArt" x="-5%" y="-5%" width="110%" height="110%" color-interpolation-filters="sRGB">
-      <feColorMatrix in="SourceGraphic" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="r"/>
-      <feOffset in="r" result="r"/>
-      <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0" result="gb"/>
-      <feOffset in="gb" result="gb"/>
-      <feBlend in="r" in2="gb" mode="screen"/>
-    </filter>
-    <filter id="splitPop" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
-      <feColorMatrix in="SourceGraphic" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="r"/>
-      <feOffset in="r" result="r"/>
-      <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0" result="gb"/>
-      <feOffset in="gb" result="gb"/>
-      <feBlend in="r" in2="gb" mode="screen"/>
-    </filter>
-  </svg>
-
   <script src="cards.js"></script>
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

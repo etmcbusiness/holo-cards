@@ -15,7 +15,7 @@
       pop.classList.remove('on');
       art.alt = c.name;
       art.src = c.art;
-      card.classList.toggle('matte', c.glitter === false); // no foil on non-holo cards
+      applyStyle();
       document.title = c.name;
       renderControls();
     }, 200);
@@ -117,56 +117,60 @@
   stage.addEventListener('pointercancel', release);
 
 
-  // ---------- sparkles ----------
-  // A few big twinkling stars over the whole card, plus dense hologram glitter in the
-  // card's art window. The glitter sits at different depths and slides with the tilt
-  // far more than the card turns; that's what makes it feel 3D.
-  let stars = [], glitter = [];
+  // ---------- holo ----------
+  // Three kinds, like real cards: holo (sparkles in the art window), reverse holo (sparkles
+  // on everything except the art window) and non-holo. One sparkle style for all: dense
+  // specks in the card's own colours plus a few bright star glints, at different depths,
+  // sliding with the tilt far more than the card turns; that's what makes it feel 3D.
+  const STYLES = ['holo', 'reverse', 'none'];
+  const STYLE_NAMES = { holo: 'Holo', reverse: 'Reverse holo', none: 'Non-holo' };
   const GLITTER_COLORS = [190, 300, 50, 160, 330, 210]; // when a card doesn't name its own
+  const styleKey = (c) => `holo-kind:${c.id || c.name}`;
+  function styleOf(c) {
+    let saved = null;
+    try { saved = localStorage.getItem(styleKey(c)); } catch {}
+    if (STYLES.includes(saved)) return saved;
+    if (STYLES.includes(c.style)) return c.style;
+    return c.glitter === false ? 'none' : 'holo';
+  }
+  function applyStyle() {
+    const st = styleOf(cards[index]);
+    card.dataset.holo = st; // CSS: no foil on non-holo cards
+    $('styleBtn').textContent = `✨ ${STYLE_NAMES[st]}`;
+    buildParticles();
+  }
+  $('styleBtn').onclick = () => {
+    const c = cards[index], next = STYLES[(STYLES.indexOf(styleOf(c)) + 1) % STYLES.length];
+    try { localStorage.setItem(styleKey(c), next); } catch {}
+    applyStyle();
+  };
+
+  let specks = [], glints = [];
+  const rnd = (a, b) => a + Math.random() * (b - a);
   function sizeSparkles() {
     const dpr = Math.min(devicePixelRatio || 1, 2);
     canvas.width = canvas.clientWidth * dpr;
     canvas.height = canvas.clientHeight * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const area = canvas.clientWidth * canvas.clientHeight;
-    const c = cards[index];
-    if (c.glitter === false) { stars = []; glitter = []; return; } // not a holo card
-    const hues = c.glitter || GLITTER_COLORS;
-    stars = Array.from({ length: Math.round(area / 9000) }, () => ({
-      x: Math.random(), y: Math.random(),
-      r: 3 + Math.random() ** 2 * 7,
-      speed: 0.6 + Math.random() * 1.5,
-      phase: Math.random() * Math.PI * 2,
-      hue: Math.random() < 0.6 ? 50 : hues[(Math.random() * hues.length) | 0],
-      depth: 0.3 + Math.random(),
-    }));
-    glitter = Array.from({ length: Math.round(area / 160) }, () => ({
-      x: Math.random(), y: Math.random(),
-      r: 1 + Math.random() ** 2 * 2.6,
-      depth: Math.random() ** 1.5,          // 0 = near the card, 1 = deep behind it
-      hue: hues[(Math.random() * hues.length) | 0],
-      speed: 1 + Math.random() * 3,
-      phase: Math.random() * Math.PI * 2,
-    }));
+    buildParticles();
   }
-
-  function drawGlitter(t, w, h) {
-    const box = cards[index].holo;
-    if (!box) return;
-    const bx = (box[0] / 100) * w, by = (box[1] / 100) * h, bw = (box[2] / 100) * w, bh = (box[3] / 100) * h;
-    ctx.save();
-    ctx.beginPath(); ctx.rect(bx, by, bw, bh); ctx.clip();
-    const SHIFT = 70; // px of slide at full tilt for the deepest glitter
-    for (const g of glitter) {
-      // deeper specks slide further, and wrap around inside the window
-      let x = (g.x * bw - cur.x * SHIFT * (0.25 + g.depth)) % bw; if (x < 0) x += bw;
-      let y = (g.y * bh - cur.y * SHIFT * 0.7 * (0.25 + g.depth)) % bh; if (y < 0) y += bh;
-      // each speck flashes as the angle sweeps past it, like real holo foil
-      const a = 0.25 + 0.75 * Math.max(0, Math.sin(g.phase + t * g.speed * 0.4 + (cur.x - cur.y) * 6 * g.speed)) ** 3;
-      ctx.fillStyle = `hsla(${g.hue}, 100%, ${62 + 30 * a}%, ${0.35 + a * 0.65})`;
-      ctx.fillRect(bx + x, by + y, g.r * (1.2 - g.depth * 0.5), g.r * (1.2 - g.depth * 0.5));
-    }
-    ctx.restore();
+  function buildParticles() {
+    const c = cards[index];
+    specks = []; glints = [];
+    if (styleOf(c) === 'none') return;
+    const area = canvas.clientWidth * canvas.clientHeight;
+    const hues = Array.isArray(c.glitter) && c.glitter.length ? c.glitter : GLITTER_COLORS;
+    const hue = () => hues[(Math.random() * hues.length) | 0];
+    // specks cover the whole card; drawing clips them to the window (holo) or the rest (reverse)
+    specks = Array.from({ length: Math.round(area / 110) }, () => ({
+      x: Math.random(), y: Math.random(), r: 0.8 + Math.random() ** 2.5 * 2.6,
+      depth: Math.random() ** 1.5, hue: Math.random() < 0.3 ? -1 : hue(), // -1 = white
+      speed: rnd(1, 4), phase: rnd(0, 6.3),
+    }));
+    glints = Array.from({ length: Math.round(area / 2600) }, () => ({
+      x: Math.random(), y: Math.random(), r: rnd(2.5, 7), depth: Math.random(),
+      hue: Math.random() < 0.5 ? -1 : hue(), speed: rnd(0.7, 2), phase: rnd(0, 6.3),
+    }));
   }
 
   function star(x, y, r) {
@@ -180,19 +184,38 @@
     ctx.fill();
   }
 
+  // 0..1, flashing as the viewing angle sweeps past a particle, like real foil
+  const flash = (phase, t, speed, k = 6) => Math.max(0, Math.sin(phase + t * speed * 0.4 + (cur.x - cur.y) * k * speed)) ** 3;
+  const colour = (h, a, light) => (h < 0 ? `rgba(255,255,255,${a})` : `hsla(${h}, 100%, ${light}%, ${a})`);
+
   function drawSparkles(t) {
-    const w = canvas.clientWidth, h = canvas.clientHeight;
+    const w = canvas.clientWidth, h = canvas.clientHeight, c = cards[index];
     ctx.clearRect(0, 0, w, h);
+    if (!specks.length) return;
     ctx.globalCompositeOperation = 'lighter';
-    drawGlitter(t, w, h);
-    for (const s of stars) {
-      const a = Math.max(0, Math.sin(s.phase + t * s.speed)) ** 4;
-      if (a < 0.02) continue;
-      const x = s.x * w - cur.x * 30 * s.depth, y = s.y * h - cur.y * 30 * s.depth;
-      ctx.fillStyle = `hsla(${s.hue}, 100%, 82%, ${a})`;
-      star(x, y, s.r * (0.6 + 0.4 * a));
-      if (s.r > 5) { ctx.fillStyle = `rgba(255,255,255,${a * 0.9})`; star(x, y, s.r * 0.35); }
+    const box = c.holo || [8, 10, 84, 38];
+    const bx = (box[0] / 100) * w, by = (box[1] / 100) * h, bw = (box[2] / 100) * w, bh = (box[3] / 100) * h;
+    ctx.save();
+    ctx.beginPath();
+    if (styleOf(c) === 'reverse') { ctx.rect(0, 0, w, h); ctx.rect(bx, by, bw, bh); ctx.clip('evenodd'); }
+    else { ctx.rect(bx, by, bw, bh); ctx.clip(); }
+    const SHIFT = 70; // px of slide at full tilt for the deepest specks
+    const wrap = (v, m) => ((v % m) + m) % m;
+    for (const g of specks) {
+      const x = wrap(g.x * w - cur.x * SHIFT * (0.25 + g.depth), w), y = wrap(g.y * h - cur.y * SHIFT * 0.7 * (0.25 + g.depth), h);
+      const a = 0.2 + 0.8 * flash(g.phase, t, g.speed);
+      const s = g.r * (1.2 - g.depth * 0.5);
+      ctx.fillStyle = colour(g.hue, 0.45 + a * 0.55, 72 + 24 * a);
+      ctx.fillRect(x, y, s, s);
     }
+    for (const g of glints) {
+      const a = flash(g.phase, t, g.speed, 4);
+      if (a < 0.05) continue;
+      const x = wrap(g.x * w - cur.x * SHIFT * (0.25 + g.depth), w), y = wrap(g.y * h - cur.y * SHIFT * 0.7 * (0.25 + g.depth), h);
+      ctx.fillStyle = colour(g.hue, a, 85);
+      star(x, y, g.r * (0.5 + 0.6 * a));
+    }
+    ctx.restore();
   }
 
   // ---------- frame loop ----------

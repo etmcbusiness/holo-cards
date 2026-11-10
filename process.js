@@ -402,16 +402,34 @@ window.HoloProcess = (() => {
       hues.push(p * 10 + 5);
       for (let k = -2; k <= 2; k++) hist[(p + k + 36) % 36] = 0;
     }
-    // holo: bright pixels that stand out from their surroundings
-    let specks = 0;
+    // Which kind of holo? Count foil specks (small bright peaks) in the art window and in the
+    // rest of the card below it: holo has them in the window, reverse holo outside it.
+    const inside = speckDensity(card, win.l, win.t, win.r, win.b);
+    const outside = speckDensity(card, 0.08, Math.min(0.9, win.b + 0.05), 0.92, 0.92);
+    // conservative: holo unless clearly not (printed text adds some false specks outside)
+    const kind = inside < 0.002 && outside < 0.004 ? 'none' : outside > inside * 2 && outside > 0.006 ? 'reverse' : 'holo';
+    return { kind, holo: kind !== 'none', hues: hues.length ? hues : [190, 300, 50], inside, outside };
+  }
+
+  // share of pixels in a region (fractions of the card) that are tiny bright peaks, like foil
+  // glitter: brighter than all four neighbours and well above their surroundings (so the
+  // white paper around printed text doesn't count)
+  function speckDensity(card, l, t, r, b) {
+    const W = card.width, H = card.height, sw = Math.round((r - l) * W), sh = Math.round((b - t) * H);
+    if (sw < 10 || sh < 10) return 0;
+    const c = canvasOf(300, Math.max(1, Math.round((300 * sh) / sw)));
+    c.getContext('2d', { willReadFrequently: true }).drawImage(card, l * W, t * H, sw, sh, 0, 0, c.width, c.height);
+    const d = pixels(c), w = c.width, h = c.height, L = new Float32Array(w * h);
+    for (let k = 0; k < w * h; k++) L[k] = d[k * 4] * 0.3 + d[k * 4 + 1] * 0.59 + d[k * 4 + 2] * 0.11;
+    let n = 0;
     for (let y = 2; y < h - 2; y++) for (let x = 2; x < w - 2; x++) {
-      const k = y * w + x;
-      if (L[k] < 150) continue;
+      const k = y * w + x, v = L[k];
+      if (v < 150 || v <= L[k - 1] + 8 || v <= L[k + 1] + 8 || v <= L[k - w] + 8 || v <= L[k + w] + 8) continue;
       let s = 0;
       for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) s += L[k + dy * w + dx];
-      if (L[k] - s / 25 > 32) specks++;
+      if (v - s / 25 > 28) n++;
     }
-    return { holo: specks / N > 0.004, hues: hues.length ? hues : [190, 300, 50], specks: specks / N };
+    return n / (w * h);
   }
 
   // Find the art window: the long straight border lines around the middle of the

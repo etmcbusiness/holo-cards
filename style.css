@@ -135,7 +135,6 @@ body {
 .place .win [data-edge=l] { left: -14px; }
 .place .win [data-edge=r] { right: -14px; }
 .place #placeArt { touch-action: none; }
-.card.matte .holo { display: none; }
 
 /* ---------- big, thumb-friendly add flow ---------- */
 .controls #add { font-size: 17px; padding: 12px 22px; border-radius: 12px; font-weight: 600; }
@@ -167,3 +166,12 @@ body {
   border: 1px solid #444; border-radius: 12px; padding: 14px;
 }
 #stepKey { padding-top: 12px; }
+
+/* holo kind button (top right); no foil on non-holo cards */
+.style-btn {
+  position: fixed; top: calc(12px + env(safe-area-inset-top)); right: 12px; z-index: 5;
+  font: inherit; font-size: 16px; font-weight: 600; color: #ffe08a; background: #3b3220;
+  border: 1px solid #c9a227; border-radius: 12px; padding: 10px 16px; cursor: pointer;
+}
+body.editing .style-btn { display: none; }
+.card[data-holo="none"] .holo { display: none; }

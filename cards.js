@@ -7,6 +7,9 @@
 //            hologram glitter goes
 //   glitter  the glitter's colours as hues in degrees, picked from the card's art;
 //            false for a non-holo card (no glitter, sparkles or foil)
+//   style    'holo' (sparkles in the art window), 'reverse' (everywhere but the art
+//            window) or 'none'
+//            (the ✨ Holo button changes it per device)
 //   pop      the character cut out on a transparent PNG, bent into a gentle curve just
 //            in front of the card. Its bottom should already fade out where it meets the
 //            bottom of the art window.
@@ -18,6 +21,7 @@ window.CARDS = [
     art: 'cards/crystal-charizard.jpg',
     holo: [10, 11.8, 86, 36.6],
     glitter: [45, 225, 195, 15],
+    style: 'holo',
     pop: { src: 'cards/crystal-charizard-pop.png', box: [1, 4.4, 93.7, 68.3] },
   },
   {
@@ -25,6 +29,7 @@ window.CARDS = [
     art: 'cards/base-charizard.jpg',
     holo: [11.3, 11.1, 79, 40.7],
     glitter: [45, 15],
+    style: 'holo',
     pop: { src: 'cards/base-charizard-pop.png', box: [7.4, 12.1, 85.1, 42.3] },
   },
   {
@@ -32,6 +37,7 @@ window.CARDS = [
     art: 'cards/star-charizard.jpg',
     holo: [7.3, 9.4, 86, 36.7],
     glitter: [155, 35, 5, 215],
+    style: 'holo',
     pop: { src: 'cards/star-charizard-pop.png', box: [0.8, 8.2, 98.1, 42.9] },
   },
 ];

@@ -25,7 +25,7 @@
   }
 
   const toCard = (rec) => ({
-    id: rec.id, name: rec.name, holo: rec.holo, glitter: rec.glitter,
+    id: rec.id, name: rec.name, holo: rec.holo, glitter: rec.glitter, style: rec.style,
     art: URL.createObjectURL(rec.art),
     pop: { src: URL.createObjectURL(rec.pop), box: rec.box },
   });
@@ -44,7 +44,7 @@
 
   // ---------- step 1: "+ Add card" opens the photo picker; then it all happens ----------
   const editor = $('editor'), status = $('pickStatus');
-  let made = null, busy = false, holoOn = true; // made: { card, char, pos {l,t,w}, win {l,t,r,b} } in % of the card
+  let made = null, busy = false, holoKind = 'holo'; // made: { card, char, pos {l,t,w}, win {l,t,r,b} } in % of the card
 
   const pickPhoto = () => { $('fileCard').value = ''; $('fileCard').click(); };
   function close() {
@@ -67,12 +67,15 @@
   const paint = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 30))); // let the status show
   const say = async (msg) => { showWork(msg); await paint(); };
 
-  function setHolo(on) {
-    holoOn = on;
-    $('holoToggle').setAttribute('aria-pressed', on);
-    $('holoToggle').textContent = on ? '✨ Holo glitter: On' : 'Holo glitter: Off';
+  // holo kind: holo (sparkles in the art window), reverse (everywhere else) or none
+  const KINDS = ['holo', 'reverse', 'none'];
+  const KIND_NAMES = { holo: '✨ Holo', reverse: '✨ Reverse holo', none: 'Non-holo' };
+  function setHolo(kind) {
+    holoKind = kind;
+    $('holoToggle').setAttribute('aria-pressed', kind !== 'none');
+    $('holoToggle').textContent = `${KIND_NAMES[kind]} (tap to change)`;
   }
-  $('holoToggle').onclick = () => setHolo(!holoOn);
+  $('holoToggle').onclick = () => setHolo(KINDS[(KINDS.indexOf(holoKind) + 1) % KINDS.length]);
 
   // one-time Gemini key screen; resolves once a key is saved
   let keyWaiter = null;
@@ -150,7 +153,7 @@
       pos = { w: w1, l: (win.l + win.r) / 2 - w1 / 2, t: (win.t + win.b) / 2 - hOf(w1) / 2 };
     }
     const glitter = P.glitterFor(ref || card, ref ? P.findWindow(ref) : w);
-    setHolo(glitter.holo);
+    setHolo(ref ? glitter.kind : 'holo'); // a repainted card has lost its foil texture, so only guess from the photo
     return { card, char: P.stylize(split.char), pos, win, hues: glitter.hues };
   }
 
@@ -259,7 +262,8 @@
         pop: await P.toBlob(pop, 'image/png'),
         box: [pos.l, pos.t, pos.w, h],
         holo: [win.l, win.t, win.r - win.l, win.b - win.t],
-        glitter: holoOn ? made.hues : false,
+        glitter: made.hues,
+        style: holoKind, // holo, reverse or none; the ✨ button on the main screen changes it
       };
       await req('readwrite', (s) => s.put(rec));
       app.add(toCard(rec), true);

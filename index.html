@@ -71,49 +71,74 @@
         </div>
         <img id="placeChar" alt="">
       </div>
-      <p class="hint">Drag the character to move it. Drag the dashed box edges to fit the art window.</p>
-      <label class="size">Size <input type="range" id="charSize" min="20" max="160" value="94"></label>
-      <button class="big toggle" id="holoToggle" aria-pressed="true">✨ Holo (tap to change)</button>
-      <button class="big toggle" id="fxToggle" aria-pressed="true" hidden>🔥 Its fire &amp; effects: on (tap to change)</button>
-      <div class="info">
-        <input type="text" id="cardName" placeholder="Card name">
-        <input type="text" id="cardGame" placeholder="Game or sport (e.g. Pokémon, Baseball)">
-        <input type="text" id="cardSet" placeholder="Set">
-        <input type="text" id="cardYear" placeholder="Year" inputmode="numeric">
-        <input type="text" id="cardNumber" placeholder="Number (e.g. 4/102)">
-        <input type="text" id="cardEdition" placeholder="Edition (e.g. 1st Edition)">
-        <select id="cardGrader" aria-label="Graded by">
-          <option value="Raw">Raw (not graded)</option><option>PSA</option><option>BGS</option>
-          <option>CGC</option><option>SGC</option><option>TAG</option><option>Other</option>
-        </select>
-        <input type="text" id="cardGrade" placeholder="Grade 1-10" inputmode="decimal">
-        <p class="hint" id="condNote"></p>
+      <p class="hint center">Drag the character to move it · drag the pink box to fit the art window</p>
+
+      <div class="group">
+        <label class="row-field">Size <input type="range" id="charSize" min="20" max="160" value="94"></label>
+        <div class="row-field">Foil
+          <div class="seg" id="holoSeg" role="radiogroup" aria-label="Foil">
+            <button data-kind="holo" role="radio">Holo</button><button data-kind="reverse" role="radio">Reverse</button><button data-kind="none" role="radio">None</button>
+          </div>
+        </div>
+        <button class="row-field switch" id="fxToggle" role="switch" aria-checked="true" hidden>🔥 Its fire &amp; breath <i></i></button>
       </div>
-      <button class="big primary" id="savePlace">Save card</button>
-      <button class="big" id="redoBest">Not right? Try Gemini’s repaint instead</button>
-      <button class="big" id="backPlace">Cancel</button>
+
+      <h3 class="section">Card details</h3>
+      <div class="info">
+        <label class="field wide"><span>Name</span><input type="text" id="cardName"></label>
+        <label class="field wide"><span>Game or sport</span><input type="text" id="cardGame" placeholder="Pokémon, Baseball…"></label>
+        <label class="field wide"><span>Set</span><input type="text" id="cardSet"></label>
+        <label class="field"><span>Year</span><input type="text" id="cardYear" inputmode="numeric"></label>
+        <label class="field"><span>Number</span><input type="text" id="cardNumber" placeholder="4/102"></label>
+        <label class="field wide"><span>Edition</span><input type="text" id="cardEdition" placeholder="1st Edition, Shadowless…"></label>
+        <label class="field"><span>Graded by</span><select id="cardGrader">
+            <option value="Raw">Raw</option><option>PSA</option><option>BGS</option>
+            <option>CGC</option><option>SGC</option><option>TAG</option><option>Other</option>
+          </select></label>
+        <label class="field"><span>Grade</span><input type="text" id="cardGrade" placeholder="1-10" inputmode="decimal"></label>
+        <p class="hint wide" id="condNote"></p>
+      </div>
+      <button class="text-btn" id="redoBest">Character not right? Try Gemini’s repaint instead</button>
+
+      <div class="actions">
+        <button class="big" id="backPlace">Cancel</button>
+        <button class="big primary" id="savePlace">Save card</button>
+      </div>
     </div>
   </section>
+
+  <!-- "remove this card?" (editor.js) -->
+  <div class="sheet-wrap" id="confirmRemove" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="rmTitle">
+      <img id="rmThumb" alt="">
+      <h2 id="rmTitle">Remove this card?</h2>
+      <p class="hint">It's taken off this phone, with its value. This can't be undone.</p>
+      <button class="big danger" id="rmYes">Remove card</button>
+      <button class="big" id="rmNo">Keep it</button>
+    </div>
+  </div>
 
   <!-- what the card is worth (value.js) -->
   <section class="editor" id="valuePanel" hidden>
     <div class="step">
-      <h2 id="vTitle">Value</h2>
-      <p class="hint" id="vSub"></p>
+      <header class="sheet-head">
+        <div><h2 id="vTitle">Value</h2><p class="hint" id="vSub"></p></div>
+        <button class="close" id="vClose" aria-label="Done">Done</button>
+      </header>
+      <div class="sales card-box" id="vResult"></div>
+      <h3 class="section">Grade</h3>
       <div class="info">
-        <select id="vGrader" aria-label="Graded by">
-          <option value="Raw">Raw (not graded)</option><option>PSA</option><option>BGS</option>
-          <option>CGC</option><option>SGC</option><option>TAG</option><option>Other</option>
-        </select>
-        <input type="text" id="vGrade" placeholder="Grade 1-10" inputmode="decimal">
-        <input type="text" id="vCert" placeholder="Cert number (optional)">
-        <label class="money">$ <input type="text" id="vPrice" placeholder="Value" inputmode="decimal"></label>
+        <label class="field"><span>Graded by</span><select id="vGrader">
+            <option value="Raw">Raw</option><option>PSA</option><option>BGS</option>
+            <option>CGC</option><option>SGC</option><option>TAG</option><option>Other</option>
+          </select></label>
+        <label class="field"><span>Grade</span><input type="text" id="vGrade" placeholder="1-10" inputmode="decimal"></label>
+        <label class="field wide" id="vCertField"><span>Cert number</span><input type="text" id="vCert" placeholder="Optional"></label>
+        <label class="field wide money"><span>Value (USD) — type to set it yourself</span><input type="text" id="vPrice" placeholder="$0.00" inputmode="decimal"></label>
+        <p class="hint wide" id="vCond"></p>
       </div>
-      <p class="hint" id="vCond"></p>
       <button class="big primary" id="vLookup">Look up last sold</button>
-      <div class="sales" id="vResult"></div>
-      <p class="hint" id="vTotal"></p>
-      <button class="big" id="vClose">Done</button>
+      <p class="hint center" id="vTotal"></p>
     </div>
   </section>
 

@@ -230,3 +230,93 @@ body.editing .value-btn { display: none; }
 .controls #add span { font-size: 20px; line-height: 1; }
 .controls #remove { width: 48px; color: #ff9a9a; }
 .pager:has(#prev[hidden]) { display: none; } /* just one card: no pager */
+
+/* ---------- editor & sheets: calmer, labelled, thumb-friendly ---------- */
+.editor { background: rgba(10, 10, 14, .97); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); padding-bottom: 0; }
+.editor .step { gap: 14px; padding-bottom: 8px; }
+.hint.center { text-align: center; }
+.section { margin: 10px 2px -4px; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #8a8c9c; }
+.group {
+  display: grid; border-radius: 16px; overflow: hidden;
+  background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .08);
+}
+.row-field {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 54px;
+  padding: 8px 14px; font-size: 16px; color: #e6e7ee;
+}
+.group > .row-field + .row-field { border-top: 1px solid rgba(255, 255, 255, .07); }
+.row-field input[type=range] { flex: 1; max-width: 240px; accent-color: #5b6ff0; }
+.seg { display: flex; background: rgba(0, 0, 0, .35); border-radius: 11px; padding: 3px; gap: 2px; }
+.editor .seg button {
+  border: 0; background: none; color: #aab; font-size: 14px; font-weight: 600; padding: 8px 12px; border-radius: 9px;
+}
+.editor .seg button[aria-checked=true] { background: #3b3220; color: #ffe08a; box-shadow: inset 0 0 0 1px #c9a227; }
+.editor .switch { width: 100%; border: 0; border-radius: 0; background: none; text-align: left; font-size: 16px; padding: 8px 14px; }
+.switch i {
+  flex: none; width: 50px; height: 30px; border-radius: 15px; background: #3a3b44; position: relative; transition: background .2s;
+}
+.switch i::after {
+  content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%;
+  background: #fff; transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.4);
+}
+.switch[aria-checked=true] i { background: #e8742c; }
+.switch[aria-checked=true] i::after { transform: translateX(20px); }
+
+.editor .info { gap: 10px; }
+.field { display: grid; gap: 5px; min-width: 0; }
+.field > span { font-size: 12px; font-weight: 600; color: #8a8c9c; padding-left: 4px; }
+.info .wide { grid-column: 1 / -1; }
+.editor .info input, .editor .info select {
+  width: 100%; font: inherit; font-size: 16px; color: #eee; background: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(255, 255, 255, .1); border-radius: 12px; padding: 12px 13px; min-width: 0;
+  -webkit-appearance: none; appearance: none;
+}
+.editor .info select {
+  background-image: linear-gradient(45deg, transparent 50%, #aab 50%), linear-gradient(135deg, #aab 50%, transparent 50%);
+  background-position: calc(100% - 18px) 52%, calc(100% - 13px) 52%; background-size: 5px 5px; background-repeat: no-repeat;
+}
+.editor .info input:focus, .editor .info select:focus { outline: none; border-color: #5b6ff0; background-color: rgba(91, 111, 240, .1); }
+.editor .info #cardName { font-size: 18px; font-weight: 600; }
+.editor .money input { color: #b9f5c8; font-size: 20px; font-weight: 700; }
+.text-btn {
+  justify-self: center; background: none !important; border: 0 !important; color: #8fb4ff !important;
+  font-size: 15px !important; padding: 6px !important; text-decoration: underline; text-underline-offset: 3px;
+}
+/* Save / Cancel stay at the bottom while scrolling */
+.actions {
+  position: sticky; bottom: 0; z-index: 3; display: grid; grid-template-columns: 1fr 2fr; gap: 10px;
+  margin: 4px -16px 0; padding: 18px 16px calc(14px + env(safe-area-inset-bottom));
+  background: linear-gradient(to bottom, rgba(10, 10, 14, 0), rgba(10, 10, 14, .97) 35%);
+}
+.editor button.big { border-radius: 14px; }
+.editor button.big.primary { background: linear-gradient(180deg, #4a5ff0, #3446d4); border-color: #6377f5; }
+
+/* value sheet */
+.sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-top: 4px; }
+.sheet-head h2 { margin: 4px 0 2px; }
+.editor .close { flex: none; font-weight: 700; color: #8fb4ff; background: rgba(255,255,255,.07); border-radius: 999px; padding: 9px 16px; }
+.card-box:not(:empty) { padding: 16px; border-radius: 16px; background: rgba(23, 48, 31, .45); border: 1px solid rgba(47, 138, 76, .45); }
+.card-box:empty { display: none; }
+
+/* remove confirmation: a sheet from the bottom */
+.sheet-wrap {
+  position: fixed; inset: 0; z-index: 20; display: flex; align-items: flex-end; justify-content: center;
+  background: rgba(0, 0, 0, .55); animation: fade .2s ease;
+}
+.sheet {
+  width: min(100%, 460px); display: grid; gap: 10px; text-align: center;
+  padding: 22px 18px calc(18px + env(safe-area-inset-bottom)); border-radius: 22px 22px 0 0;
+  background: #17181e; border-top: 1px solid rgba(255,255,255,.08); animation: rise .25s ease;
+}
+.sheet img { width: 84px; justify-self: center; border-radius: 6px; box-shadow: 0 8px 20px rgba(0,0,0,.5); }
+.sheet h2 { margin: 6px 0 0; font-size: 20px; }
+.sheet .hint { margin-bottom: 8px; }
+.sheet button.big {
+  width: 100%; font: inherit; font-size: 17px; font-weight: 700; padding: 15px; border-radius: 14px; cursor: pointer;
+  color: #eee; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.1);
+}
+.sheet button.danger { background: #b3261e; border-color: #d9443b; color: #fff; }
+@keyframes fade { from { opacity: 0; } }
+@keyframes rise { from { transform: translateY(40px); opacity: 0; } }
+body.editing .controls, body.editing .caption { visibility: hidden; }
+.editor .field.money { display: grid; font-size: inherit; }

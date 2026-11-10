@@ -34,10 +34,25 @@
     .then((recs) => recs.filter((r) => !/^ai\d*:/.test(r.id)).forEach((r) => app.add(toCard(r), false))) // ai…: = kept Gemini results
     .catch((e) => console.warn('Saved cards unavailable:', e));
 
-  $('remove').onclick = async () => {
+  // remove: an in-app sheet asks first
+  const sheet = $('confirmRemove');
+  const closeSheet = () => { sheet.hidden = true; document.body.classList.remove('editing'); };
+  $('remove').onclick = () => {
     const c = app.current();
-    if (!c?.id || !confirm(`Remove ${c.name} from this device?`)) return;
+    if (!c?.id) return;
+    $('rmTitle').textContent = `Remove ${c.name}?`;
+    $('rmThumb').src = c.art;
+    sheet.hidden = false;
+    document.body.classList.add('editing');
+  };
+  $('rmNo').onclick = closeSheet;
+  sheet.onclick = (e) => { if (e.target === sheet) closeSheet(); };
+  $('rmYes').onclick = async () => {
+    const c = app.current();
+    closeSheet();
+    if (!c?.id) return;
     await req('readwrite', (s) => s.delete(c.id));
+    try { localStorage.removeItem(`holo-value:${app.keyOf(c)}`); localStorage.removeItem(`holo-kind:${app.keyOf(c)}`); } catch {}
     app.removeCurrent();
     URL.revokeObjectURL(c.art); URL.revokeObjectURL(c.pop.src);
   };
@@ -69,13 +84,12 @@
 
   // holo kind: holo (sparkles in the art window), reverse (everywhere else) or none
   const KINDS = ['holo', 'reverse', 'none'];
-  const KIND_NAMES = { holo: '✨ Holo', reverse: '✨ Reverse holo', none: 'Non-holo' };
+
   function setHolo(kind) {
     holoKind = kind;
-    $('holoToggle').setAttribute('aria-pressed', kind !== 'none');
-    $('holoToggle').textContent = `${KIND_NAMES[kind]} (tap to change)`;
+    for (const b of $('holoSeg').children) b.setAttribute('aria-checked', b.dataset.kind === kind);
   }
-  $('holoToggle').onclick = () => setHolo(KINDS[(KINDS.indexOf(holoKind) + 1) % KINDS.length]);
+  for (const b of $('holoSeg').children) b.onclick = () => setHolo(b.dataset.kind);
 
   // card details: filled in from Gemini's reading of the card, editable before saving
   const INFO_FIELDS = { game: 'cardGame', set: 'cardSet', year: 'cardYear', number: 'cardNumber', edition: 'cardEdition' };
@@ -255,8 +269,7 @@
   function showFx(on) {
     const b = $('fxToggle');
     b.hidden = on === null;
-    b.setAttribute('aria-pressed', !!on);
-    b.textContent = on ? '🔥 Its fire & effects: on (tap to change)' : '🔥 Its fire & effects: off (tap to change)';
+    b.setAttribute('aria-checked', !!on);
   }
   $('fxToggle').onclick = () => {
     if (!made?.masks) return;

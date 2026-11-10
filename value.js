@@ -83,7 +83,7 @@ window.HoloValue = (() => {
     $('vGrader').value = v.grader || 'Raw';
     $('vGrade').value = v.grade || '';
     $('vCert').value = v.cert || '';
-    $('vCert').hidden = raw;
+    $('vCertField').hidden = raw;
     $('vPrice').value = v.price ? (+v.price).toFixed(2) : '';
     $('vCond').textContent = raw && v.estimated && v.note ? `Estimated from the photo: ${v.note}` : '';
     const busy = looking.has(KEY(c));

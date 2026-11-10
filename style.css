@@ -66,6 +66,9 @@ body {
 .pop {
   position: absolute; display: none; pointer-events: none;
   overflow: hidden; /* hides the part below the cut line */
+  /* fade into the card at the cut line instead of a hard edge */
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 9%), transparent);
+          mask-image: linear-gradient(to bottom, #000 calc(100% - 9%), transparent);
   transform: translateZ(60px);
 }
 .pop.on { display: block; }

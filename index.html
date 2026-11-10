@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Holo Cards</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="stage" id="stage">
+    <div class="card" id="card">
+      <div class="window">
+        <div class="titlebar">
+          <span class="icon" id="icon"></span>
+          <span class="title" id="title"></span>
+          <span class="btns"><b>_</b><b>□</b><b class="x">✕</b></span>
+        </div>
+        <div class="menubar"><u>F</u>ile <u>E</u>dit <u>V</u>iew <u>H</u>elp</div>
+        <div class="viewport" id="viewport">
+          <div class="rays"></div>
+          <img class="art" id="art" alt="">
+          <div class="holo"></div>
+          <canvas class="sparkles" id="sparkles"></canvas>
+          <div class="glare"></div>
+        </div>
+        <div class="caption" id="caption"></div>
+        <div class="stripes"></div>
+      </div>
+      <div class="pop" id="pop"><img id="popImg" alt=""></div>
+    </div>
+  </main>
+
+  <nav class="controls">
+    <button id="prev" aria-label="Previous card">◀</button>
+    <span id="dots" class="dots"></span>
+    <button id="next" aria-label="Next card">▶</button>
+  </nav>
+  <button id="motion" class="motion" hidden>Tilt with phone</button>
+
+  <svg width="0" height="0" aria-hidden="true">
+    <!-- red/cyan fringe, like a photographed CRT -->
+    <filter id="fringe" color-interpolation-filters="sRGB">
+      <feColorMatrix in="SourceGraphic" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="r"/>
+      <feOffset in="r" dx="-0.8" result="r"/>
+      <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0" result="gb"/>
+      <feOffset in="gb" dx="0.8" result="gb"/>
+      <feBlend in="r" in2="gb" mode="screen"/>
+    </filter>
+  </svg>
+
+  <script src="cards.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -50,7 +50,9 @@ window.HoloProcess = (() => {
     return out;
   }
 
-  function cutout(img) {
+  // plain: also treat a solid background matching the border colour as background. Off for
+  // card scans, whose own border would match when the card fills the photo.
+  function cutout(img, { plain = true } = {}) {
     const c = fit(img, 1200), W = c.width, H = c.height, N = W * H;
     const x = c.getContext('2d', { willReadFrequently: true });
     const id = x.getImageData(0, 0, W, H), d = id.data;
@@ -69,8 +71,8 @@ window.HoloProcess = (() => {
       const r = d[k * 4], g = d[k * 4 + 1], b = d[k * 4 + 2];
       const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
       const checker = mx - mn < 30 && mn > 95;
-      const plain = Math.hypot(r - br, g - bg, b - bb) < 45;
-      return checker || plain;
+      const solid = plain && Math.hypot(r - br, g - bg, b - bb) < 45;
+      return checker || solid;
     };
     const back = new Uint8Array(N);
     flood(N, W, seeds, isBg, back);
@@ -235,5 +237,8 @@ window.HoloProcess = (() => {
 
   const toBlob = (c, type, q) => new Promise((ok) => c.toBlob(ok, type, q));
 
-  return { loadImage, fit, cutout, stylize, fadeBottom, toBlob };
+  // the card cropped out of any checkerboard / white background around it
+  const cropCard = (img) => cutout(img, { plain: false });
+
+  return { loadImage, fit, cutout, cropCard, stylize, fadeBottom, toBlob };
 })();

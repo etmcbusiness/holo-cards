@@ -68,7 +68,7 @@
     artCanvas = null; ready();
     if (!f) return;
     try {
-      artCanvas = P.fit(await P.loadImage(f), 1000);
+      artCanvas = P.cropCard(await P.loadImage(f));
       if (!$('cardName').value) $('cardName').value = f.name.replace(/\.[^.]+$/, '');
     } catch (err) { status.textContent = err.message; }
     ready();

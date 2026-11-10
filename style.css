@@ -1,6 +1,8 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body {
+  height: 100dvh; /* the visible area, above Safari's toolbar */
+  display: flex; flex-direction: column;
   background: radial-gradient(ellipse at 50% 40%, #23242b 0%, #0c0c10 75%);
   color: #eee;
   font-family: system-ui, sans-serif;
@@ -11,7 +13,7 @@ body {
 }
 
 .stage {
-  height: calc(100svh - 70px);
+  flex: 1; min-height: 0;
   display: grid;
   place-items: center;
   perspective: 900px;
@@ -78,7 +80,7 @@ body {
 }
 
 .controls {
-  height: 70px; display: flex; align-items: center; justify-content: center; gap: 18px;
+  flex: none; height: 70px; display: flex; align-items: center; justify-content: center; gap: 10px;
   padding-bottom: env(safe-area-inset-bottom);
 }
 .controls button, .motion {

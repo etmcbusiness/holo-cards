@@ -79,6 +79,30 @@ window.HoloProcess = (() => {
     const back = new Uint8Array(N);
     flood(N, W, seeds, isBg, back);
 
+    // Checkerboard trapped inside the character (e.g. inside a curled tail) can't be reached
+    // from the edges. A pocket of background-like pixels that mixes the checker's two tones
+    // (white and light grey) is checkerboard; a white claw or highlight is mostly one tone.
+    const seen = new Uint8Array(N), minPocket = Math.max(300, N * 0.0008);
+    for (let s = 0; s < N; s++) {
+      if (back[s] || seen[s] || !isBg(s)) continue;
+      const pocket = [], st = [s];
+      let hi = 0, lo = 0;
+      while (st.length) {
+        const k = st.pop();
+        if (seen[k] || back[k] || !isBg(k)) continue;
+        seen[k] = 1; pocket.push(k);
+        const mn = Math.min(d[k * 4], d[k * 4 + 1], d[k * 4 + 2]);
+        if (mn > 236) hi++; else if (mn < 228) lo++;
+        const i = k % W;
+        if (i > 0) st.push(k - 1);
+        if (i < W - 1) st.push(k + 1);
+        if (k >= W) st.push(k - W);
+        if (k < N - W) st.push(k + W);
+      }
+      const n = pocket.length;
+      if (n >= minPocket && hi > n * 0.2 && lo > n * 0.2) for (const k of pocket) back[k] = 1;
+    }
+
     // keep the big pieces (body, a detached flame...), drop specks
     const label = new Int32Array(N), sizes = [0];
     for (let s = 0; s < N; s++) {
@@ -187,34 +211,25 @@ window.HoloProcess = (() => {
     const br = Math.max(1, Math.round(5 * scale));
     h = blur(blur(h, W, H, 1, br), W, H, 1, br);
 
-    // softened colour
-    const pr = new Float32Array(N * 4);
-    for (let k = 0; k < N; k++) {
-      const a = d[k * 4 + 3] / 255;
-      pr[k * 4] = d[k * 4] * a; pr[k * 4 + 1] = d[k * 4 + 1] * a; pr[k * 4 + 2] = d[k * 4 + 2] * a; pr[k * 4 + 3] = a;
-    }
-    const b = blur(pr, W, H, 4, Math.max(1, Math.round(3 * scale)));
-
-    // light the puffed shape from the top-left in four bold bands
+    // Light the puffed shape from the top-left, keeping every original pixel's detail:
+    // a soft shade multiplies the colour (darker edges away from the light, a gentle
+    // highlight toward it), plus a little extra saturation. No blur, no banding.
     const Lx = -0.55, Ly = -0.6, Lz = 0.58;
     const Hf = (i, y) => h[Math.min(H - 1, Math.max(0, y)) * W + Math.min(W - 1, Math.max(0, i))];
     for (let y = 0; y < H; y++) for (let i = 0; i < W; i++) {
       const k = y * W + i;
       if (d[k * 4 + 3] < 8) continue;
-      const a = b[k * 4 + 3] || 1;
-      let [Hh, S, L] = toHSL(b[k * 4] / a / 255, b[k * 4 + 1] / a / 255, b[k * 4 + 2] / a / 255);
-      if (L < 0.18) L = 0.07;
-      else {
-        const gx = (Hf(i + 2, y) - Hf(i - 2, y)) / 4, gy = (Hf(i, y + 2) - Hf(i, y - 2)) / 4;
-        const len = Math.hypot(gx, gy, 1);
-        const ndl = Math.max(0, (-gx * Lx - gy * Ly + Lz) / len);
-        let shade = 0.2 + 1.05 * ndl;
-        shade = shade < 0.55 ? 0.55 : shade < 0.85 ? 0.8 : shade < 1.05 ? 1.0 : 1.18;
-        L = Math.min(0.92, Math.max(0.1, L * shade + (shade > 1.1 ? 0.1 : 0)));
-        S = Math.min(1, S * 1.3);
-      }
+      const gx = (Hf(i + 2, y) - Hf(i - 2, y)) / 4, gy = (Hf(i, y + 2) - Hf(i, y - 2)) / 4;
+      const len = Math.hypot(gx, gy, 1);
+      const ndl = Math.max(0, (-gx * Lx - gy * Ly + Lz) / len);
+      const shade = 0.72 + 0.42 * ndl;                       // ~0.72 (turned away) .. ~1.14 (facing the light)
+      const shine = Math.max(0, ndl - 0.92) * 2.2 * 255;     // small soft highlight
+      let [Hh, S, L] = toHSL(d[k * 4] / 255, d[k * 4 + 1] / 255, d[k * 4 + 2] / 255);
+      S = Math.min(1, S * 1.12);
       const [r, g, bl] = toRGB(Hh, S, L);
-      d[k * 4] = r * 255; d[k * 4 + 1] = g * 255; d[k * 4 + 2] = bl * 255;
+      d[k * 4] = Math.min(255, r * 255 * shade + shine);
+      d[k * 4 + 1] = Math.min(255, g * 255 * shade + shine);
+      d[k * 4 + 2] = Math.min(255, bl * 255 * shade + shine);
     }
     x.putImageData(id, 0, 0);
     return c;

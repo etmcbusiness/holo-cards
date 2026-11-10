@@ -2,7 +2,7 @@
 // browser's localStorage only, never in the code).
 //   layered(card)  -> one image: the card with the character painted out, and the character
 //                     cut out beside it, on white (one image call per card)
-//   identify(card) -> { name, set, year, number, edition, foil } read from the card (one
+//   identify(photo) -> { name, set, year, number, edition, foil, corners } read from the card (one
 //                     cheap text call)
 window.HoloAI = (() => {
   const KEY = 'holo-gemini-key';
@@ -77,7 +77,8 @@ window.HoloAI = (() => {
   const IDENTIFY = 'Identify this trading card. Give its exact printed name (as on the card), the set it is from, the year that set was released, ' +
     'the card number (like 4/102), the edition or print (for example "1st Edition", "Shadowless", "Unlimited", "Japanese", or "" if none), ' +
     'and its foil: "holo" if the artwork is holographic, "reverse" if the card is foil everywhere except the artwork, or "none". ' +
-    'Use "" for anything you cannot tell.';
+    'Use "" for anything you cannot tell. Also give corners: the four corners of the card outer edge in this image as [x, y] on a 0-1000 scale ' +
+    '(x across, y down), in the order top-left, top-right, bottom-right, bottom-left of the card.';
 
   async function identify(card) {
     const parts = await call(TEXT_MODELS, {
@@ -90,6 +91,7 @@ window.HoloAI = (() => {
             name: { type: 'STRING' }, set: { type: 'STRING' }, year: { type: 'STRING' },
             number: { type: 'STRING' }, edition: { type: 'STRING' },
             foil: { type: 'STRING', enum: ['holo', 'reverse', 'none'] },
+            corners: { type: 'ARRAY', items: { type: 'ARRAY', items: { type: 'NUMBER' } } },
           },
           required: ['name', 'set', 'year', 'number', 'edition', 'foil'],
         },

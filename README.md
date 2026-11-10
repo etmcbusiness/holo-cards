@@ -6,7 +6,7 @@ Live page: https://etmcbusiness.github.io/holo-cards/
 
 ## Adding a card on the page
 
-Tap **+ Add card**; the photo gallery opens. Pick either:
+Tap **+ Add card**; the photo gallery opens. Pick either (photos can be at an angle on a table, or screenshots; the card is found, straightened and cropped automatically):
 
 - **a plain photo or scan of the card.** Google Gemini (your own API key, asked for once and kept only on that device) paints the character out of the card and isolates it in place. A few cents per card.
 - **one image with the card (character removed) and the cut-out side by side,** on a checkerboard or plain background. No AI needed.

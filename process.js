@@ -289,6 +289,115 @@ window.HoloProcess = (() => {
   // the card cropped out of any checkerboard / white background around it
   const cropCard = (img) => cutout(img, { plain: false });
 
+  // A photo or screenshot of a card at any angle, made flat and perfectly cropped.
+  // `corners`: rough [x, y] corners on a 0-1000 scale (top-left, top-right, bottom-right,
+  // bottom-left), e.g. from Gemini. Each side is snapped onto the strongest straight edge
+  // near it, the sides are intersected for exact corners, and the card is warped flat.
+  function straighten(img, corners) {
+    const src = fit(img, 1600), W = src.width, H = src.height;
+    let quad = corners.map(([x, y]) => [(x / 1000) * W, (y / 1000) * H]);
+    try { quad = snapQuad(src, quad); } catch (e) { console.warn('Edge snap failed, using rough corners', e); }
+    // pull in a hair so no sliver of the table or screen shows along the edges
+    const cx = quad.reduce((s, p) => s + p[0], 0) / 4, cy = quad.reduce((s, p) => s + p[1], 0) / 4;
+    quad = quad.map(([x, y]) => [x + (cx - x) * 0.012, y + (cy - y) * 0.012]);
+    const outH = 1200, outW = Math.round(outH * (63 / 88)); // standard card proportions
+    return warp(src, quad, outW, outH);
+  }
+
+  function snapQuad(src, quad) {
+    const W = src.width, H = src.height, d = pixels(src);
+    const L = (x, y) => {
+      const xi = Math.min(W - 1, Math.max(0, Math.round(x))), yi = Math.min(H - 1, Math.max(0, Math.round(y)));
+      const p = (yi * W + xi) * 4;
+      return d[p] * 0.3 + d[p + 1] * 0.59 + d[p + 2] * 0.11;
+    };
+    const R = Math.hypot(W, H) * 0.03; // how far from the rough line to look
+    const lines = [];
+    for (let i = 0; i < 4; i++) {
+      const [ax, ay] = quad[i], [bx, by] = quad[(i + 1) % 4];
+      const len = Math.hypot(bx - ax, by - ay), nx = -(by - ay) / len, ny = (bx - ax) / len;
+      const pts = [];
+      for (let t = 0.08; t <= 0.92; t += 0.02) {
+        const px = ax + (bx - ax) * t, py = ay + (by - ay) * t;
+        let best = 0, bs = 0;
+        for (let s = -R; s <= R; s += 1) {
+          const g = Math.abs(L(px + nx * (s + 1.5), py + ny * (s + 1.5)) - L(px + nx * (s - 1.5), py + ny * (s - 1.5)));
+          if (g > best) { best = g; bs = s; }
+        }
+        if (best > 18) pts.push([px + nx * bs, py + ny * bs]);
+      }
+      if (pts.length < 8) throw new Error('not enough edge');
+      lines.push(fitLine(pts));
+    }
+    return [0, 1, 2, 3].map((i) => intersect(lines[(i + 3) % 4], lines[i]));
+  }
+
+  // total-least-squares line through points, refit after dropping the worst 30%
+  function fitLine(pts) {
+    const fit1 = (p) => {
+      const mx = p.reduce((s, q) => s + q[0], 0) / p.length, my = p.reduce((s, q) => s + q[1], 0) / p.length;
+      let sxx = 0, syy = 0, sxy = 0;
+      for (const [x, y] of p) { sxx += (x - mx) ** 2; syy += (y - my) ** 2; sxy += (x - mx) * (y - my); }
+      const a = 0.5 * Math.atan2(2 * sxy, sxx - syy); // direction angle
+      return { mx, my, dx: Math.cos(a), dy: Math.sin(a) };
+    };
+    let l = fit1(pts);
+    const dist = (q) => Math.abs((q[0] - l.mx) * l.dy - (q[1] - l.my) * l.dx);
+    const keep = [...pts].sort((a, b) => dist(a) - dist(b)).slice(0, Math.max(5, Math.round(pts.length * 0.7)));
+    return fit1(keep);
+  }
+  function intersect(a, b) {
+    const den = a.dx * b.dy - a.dy * b.dx;
+    if (Math.abs(den) < 1e-6) throw new Error('parallel edges');
+    const t = ((b.mx - a.mx) * b.dy - (b.my - a.my) * b.dx) / den;
+    return [a.mx + a.dx * t, a.my + a.dy * t];
+  }
+
+  // perspective warp of the quad (tl, tr, br, bl) in `src` to a w x h rectangle
+  function warp(src, quad, w, h) {
+    const Hm = homography([[0, 0], [w, 0], [w, h], [0, h]], quad); // output -> source
+    const sd = pixels(src), SW = src.width, SH = src.height;
+    const out = canvasOf(w, h), ox = out.getContext('2d', { willReadFrequently: true });
+    const od = ox.createImageData(w, h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const zx = Hm[0] * x + Hm[1] * y + Hm[2], zy = Hm[3] * x + Hm[4] * y + Hm[5], zw = Hm[6] * x + Hm[7] * y + 1;
+      const sx = zx / zw, sy = zy / zw;
+      const x0 = Math.floor(sx), y0 = Math.floor(sy), fx = sx - x0, fy = sy - y0;
+      if (x0 < 0 || y0 < 0 || x0 >= SW - 1 || y0 >= SH - 1) continue;
+      const p = (y0 * SW + x0) * 4, q = (y * w + x) * 4;
+      for (let c = 0; c < 3; c++) {
+        const top = sd[p + c] * (1 - fx) + sd[p + 4 + c] * fx;
+        const bot = sd[p + SW * 4 + c] * (1 - fx) + sd[p + SW * 4 + 4 + c] * fx;
+        od.data[q + c] = top * (1 - fy) + bot * fy;
+      }
+      od.data[q + 3] = 255;
+    }
+    ox.putImageData(od, 0, 0);
+    return out;
+  }
+
+  // 3x3 homography (h33 = 1) taking 4 points `from` onto 4 points `to`
+  function homography(from, to) {
+    const A = [], B = [];
+    for (let i = 0; i < 4; i++) {
+      const [x, y] = from[i], [u, v] = to[i];
+      A.push([x, y, 1, 0, 0, 0, -u * x, -u * y]); B.push(u);
+      A.push([0, 0, 0, x, y, 1, -v * x, -v * y]); B.push(v);
+    }
+    for (let c = 0; c < 8; c++) { // Gaussian elimination with partial pivoting
+      let p = c;
+      for (let r = c + 1; r < 8; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r;
+      [A[c], A[p]] = [A[p], A[c]]; [B[c], B[p]] = [B[p], B[c]];
+      for (let r = 0; r < 8; r++) {
+        if (r === c) continue;
+        const f = A[r][c] / A[c][c];
+        for (let k = c; k < 8; k++) A[r][k] -= f * A[c][k];
+        B[r] -= f * B[c];
+      }
+    }
+    return B.map((b, i) => b / A[i][i]);
+  }
+
   // One image with the card (character removed) and the cut-out character side by side,
   // on a checkerboard or plain background.
   // Returns { card, char } or null if the image isn't laid out like that.
@@ -460,5 +569,5 @@ window.HoloProcess = (() => {
     return { l: l / W, t: t / H, r: r / W, b: b / H };
   }
 
-  return { loadImage, fit, cutout, cropCard, splitLayered, locate, findWindow, glitterFor, stylize, fadeBottom, toBlob };
+  return { loadImage, fit, cutout, cropCard, straighten, splitLayered, locate, findWindow, glitterFor, stylize, fadeBottom, toBlob };
 })();

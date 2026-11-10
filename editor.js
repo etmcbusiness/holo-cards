@@ -114,15 +114,26 @@
       fillInfo({});
       await say('Looking at the photo…');
       const img = await P.loadImage(f);
+      // A cheap text call reads the card's name, set etc. (skipped without a key)
+      const identify = (c) => (AI.getKey() ? AI.identify(c).catch((e) => { console.warn('Could not identify the card:', e); return null; }) : null);
       // Already split (card + cut-out side by side)? No image AI needed.
       const split = P.splitLayered(img);
-      if (!split && !AI.getKey()) await askForKey();
-      // read the card's name, set etc. alongside (a cheap text call; skipped without a key)
-      const idCard = split ? split.card : P.cropCard(img);
-      const id = AI.getKey() ? AI.identify(idCard).catch((e) => { console.warn('Could not identify the card:', e); return null; }) : null;
-      made = split ? fromSplit(split) : await fromPhoto(img);
-      showPlace();
-      const info = await id;
+      let info;
+      if (split) {
+        const id = identify(split.card);
+        made = fromSplit(split);
+        showPlace();
+        info = await id;
+      } else {
+        if (!AI.getKey()) await askForKey();
+        await say('Reading the card…');
+        info = await identify(P.fit(img, 1600));
+        // straighten and crop it exactly using the corners Gemini found, else trim plain borders
+        const ok = Array.isArray(info?.corners) && info.corners.length === 4 && info.corners.every((p) => p?.length === 2);
+        const card = ok ? P.straighten(img, info.corners) : P.cropCard(img);
+        made = await fromPhoto(card);
+        showPlace();
+      }
       if (info && made) {
         fillInfo(info);
         if (['holo', 'reverse', 'none'].includes(info.foil)) setHolo(info.foil);
@@ -176,10 +187,7 @@
 
   // A plain photo of a card: one Gemini call returns the card with the character painted
   // out and the character cut out beside it; that's split like a hand-made layered image.
-  async function fromPhoto(img) {
-    if (!AI.getKey()) await askForKey();
-    await say('Finding the card…');
-    const card = P.cropCard(img);
+  async function fromPhoto(card) {
     // Gemini's answer for this photo is kept, so trying the same photo again costs nothing
     const cacheId = `ai2:${pending.name}:${pending.size}:${pending.lastModified}`;
     const hit = await req('readonly', (s) => s.get(cacheId)).catch(() => null);

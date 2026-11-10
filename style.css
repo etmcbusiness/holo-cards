@@ -27,9 +27,9 @@ body {
   width: min(80vw, 420px, calc((100svh - 130px) * 0.72));
   transform: rotateX(var(--ty)) rotateY(var(--tx));
   transform-style: preserve-3d;
-  transition: opacity .25s;
 }
-.card.swap { opacity: 0; }
+.card .face, .card .pop i { transition: opacity .2s ease; }
+.card.swap .face, .card.swap .pop i { opacity: 0; }
 
 .face {
   position: relative; overflow: hidden;

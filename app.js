@@ -8,12 +8,27 @@
   let index = 0;
 
   // ---------- card content ----------
-  function show(i) {
+  // Switching cards: fade the old one out while the new card's pictures load, swap
+  // everything at once (character included), fade back in. Only the flat layers fade;
+  // fading the 3D card itself would flatten the character for the length of the fade.
+  const ready = new Map(); // picture url -> promise that it's decoded
+  const preload = (src) => {
+    if (!src) return Promise.resolve();
+    if (!ready.has(src)) {
+      const im = new Image();
+      im.src = src;
+      ready.set(src, im.decode().catch(() => {}));
+    }
+    return ready.get(src);
+  };
+  let showing = 0;
+  async function show(i) {
     index = (i + cards.length) % cards.length;
-    const c = cards[index];
+    const c = cards[index], me = ++showing;
     card.classList.add('swap');
-    setTimeout(() => {
-      pop.classList.remove('on');
+    await Promise.all([preload(c.art), preload(c.pop?.src), new Promise((r) => setTimeout(r, 180))]);
+    if (me !== showing) return; // tapped on again meanwhile
+    {
       art.alt = c.name;
       art.src = c.art;
       bg.firstElementChild.style.backgroundImage = `url("${c.art}")`;
@@ -25,7 +40,10 @@
       $('caption').querySelector('b').textContent = c.name;
       $('caption').querySelector('span').textContent = [i.set, i.year, i.number, i.edition].filter(Boolean).join(' · ');
       renderControls();
-    }, 200);
+      if (art.complete && art.naturalWidth) art.dispatchEvent(new Event('load')); // same picture: no load event
+    }
+    // the next and previous cards' pictures, ready before they're needed
+    for (const d of [1, -1]) { const n = cards[(index + d + cards.length) % cards.length]; preload(n.art); preload(n.pop?.src); }
   }
 
   function renderControls() {
@@ -50,6 +68,7 @@
 
   function placePop() {
     const c = cards[index];
+    pop.classList.toggle('on', !!c.pop);
     if (!c.pop) return;
     // art position inside the card (offsets ignore the 3D tilt)
     let x = 0, y = 0;
@@ -85,6 +104,7 @@
     sizeSparkles();
     sizeAmbience();
     placePop();
+    getComputedStyle(pop.firstElementChild || pop).opacity; // new strips start hidden, so they fade in with the card
     card.classList.remove('swap');
   });
   addEventListener('resize', () => { sizeSparkles(); sizeAmbience(); placePop(); });

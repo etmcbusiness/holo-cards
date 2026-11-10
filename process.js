@@ -240,5 +240,159 @@ window.HoloProcess = (() => {
   // the card cropped out of any checkerboard / white background around it
   const cropCard = (img) => cutout(img, { plain: false });
 
-  return { loadImage, fit, cutout, cropCard, stylize, fadeBottom, toBlob };
+  const pixels = (c) => c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, c.width, c.height).data;
+  const scaled = (c, w) => {
+    const out = canvasOf(Math.max(1, Math.round(w)), Math.max(1, Math.round((w * c.height) / c.width)));
+    out.getContext('2d', { willReadFrequently: true }).drawImage(c, 0, 0, out.width, out.height);
+    return out;
+  };
+
+  // Find the art window: the long straight border lines around the middle of the
+  // upper half. Returns { l, t, r, b } as fractions of the card.
+  function findWindow(card, cx = 0.5, cy = 0.3) {
+    const c = scaled(card, 300), d = pixels(c), W = c.width, H = c.height;
+    const L = new Float32Array(W * H);
+    for (let k = 0; k < W * H; k++) L[k] = d[k * 4] * 0.3 + d[k * 4 + 1] * 0.59 + d[k * 4 + 2] * 0.11;
+    const at = (x, y) => L[Math.min(H - 1, Math.max(0, y)) * W + Math.min(W - 1, Math.max(0, x))];
+    const run = (n, edge) => { // longest run of edge pixels, allowing gaps of 2px
+      let best = 0, cur = 0, gap = 0;
+      for (let i = 0; i < n; i++) {
+        if (edge(i)) { cur += gap + 1; gap = 0; best = Math.max(best, cur); }
+        else if (++gap > 2) { cur = 0; gap = 0; }
+      }
+      return best;
+    };
+    const rowLine = (y) => run(W, (x) => Math.abs(at(x, y + 1) - at(x, y - 1)) > 28) >= W * 0.45;
+    let t = null, b = null;
+    for (let y = Math.round(H * 0.04); y < cy * H; y++) if (rowLine(y)) t = y;
+    for (let y = Math.round(H * 0.8); y > cy * H; y--) if (rowLine(y)) b = y;
+    t ??= Math.round(H * 0.11); b ??= Math.round(H * 0.5);
+    const colLine = (x) => run(b - t, (i) => Math.abs(at(x + 1, t + i) - at(x - 1, t + i)) > 28) >= (b - t) * 0.5;
+    let l = null, r = null;
+    for (let x = Math.round(W * 0.02); x < cx * W; x++) if (colLine(x)) l = x;
+    for (let x = Math.round(W * 0.98); x > cx * W; x--) if (colLine(x)) r = x;
+    l ??= Math.round(W * 0.08); r ??= Math.round(W * 0.92);
+    return { l: l / W, t: t / H, r: r / W, b: b / H };
+  }
+
+  // The art window as its own canvas, and where it sits on the card (px).
+  function windowCrop(card, win) {
+    const W = card.width, H = card.height;
+    const x = Math.round(win.l * W), y = Math.round(win.t * H);
+    const crop = canvasOf(Math.round((win.r - win.l) * W), Math.round((win.b - win.t) * H));
+    crop.getContext('2d').drawImage(card, x, y, crop.width, crop.height, 0, 0, crop.width, crop.height);
+    return { crop, x, y };
+  }
+
+  // Segment Anything (SlimSAM, ~14 MB, downloaded once and cached by the browser).
+  // segmenter(crop) analyses the image once; the function it returns turns tap points
+  // ([{ x, y, on }], in crop pixels; on=false means "not this") into a mask quickly.
+  const SAM_LIB = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1';
+  const SAM_MODEL = 'Xenova/slimsam-77-uniform';
+  let sam = null;
+  async function segmenter(crop, onProgress) {
+    sam ??= (async () => {
+      const T = await import(SAM_LIB);
+      const progress_callback = (p) => { if (p.status === 'progress') onProgress?.(p.progress / 100); };
+      const [model, processor] = await Promise.all([
+        T.SamModel.from_pretrained(SAM_MODEL, { progress_callback }),
+        T.AutoProcessor.from_pretrained(SAM_MODEL, { progress_callback }),
+      ]);
+      return { T, model, processor };
+    })();
+    const { T, model, processor } = await sam;
+    const raw = await T.RawImage.fromURL(crop.toDataURL('image/png'));
+    const emb = await model.get_image_embeddings(await processor(raw));
+    const plane = crop.width * crop.height;
+    return async (points) => {
+      const inp = await processor(raw, {
+        input_points: [points.map((p) => [p.x, p.y])],
+        input_labels: [points.map((p) => (p.on ? 1 : 0))],
+      });
+      const out = await model({ ...emb, input_points: inp.input_points, input_labels: inp.input_labels });
+      const masks = await processor.post_process_masks(out.pred_masks, inp.original_sizes, inp.reshaped_input_sizes);
+      const sc = out.iou_scores.data;
+      let s = 0;
+      for (let k = 1; k < 3; k++) if (sc[k] > sc[s]) s = k;
+      return masks[0].data.subarray(s * plane, (s + 1) * plane);
+    };
+  }
+
+  // the crop with everything outside the mask made transparent (edge softened)
+  function applyMask(crop, mask) {
+    const W = crop.width, H = crop.height;
+    const out = canvasOf(W, H), x = out.getContext('2d', { willReadFrequently: true });
+    x.drawImage(crop, 0, 0);
+    const id = x.getImageData(0, 0, W, H), d = id.data;
+    for (let y = 0; y < H; y++) for (let i = 0; i < W; i++) {
+      let n = 0, t = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const yy = y + dy, xx = i + dx;
+        if (yy < 0 || yy >= H || xx < 0 || xx >= W) continue;
+        t++; if (mask[yy * W + xx]) n++;
+      }
+      d[(y * W + i) * 4 + 3] = Math.round((255 * n) / t);
+    }
+    x.putImageData(id, 0, 0);
+    return out;
+  }
+
+  // Paint the character out of the card by diffusing the surrounding colours into where
+  // it was (slightly widened). `char` is the extracted canvas, drawn at card pixel (x, y).
+  function eraseFromCard(card, char, x, y) {
+    const W = card.width, H = card.height;
+    const out = canvasOf(W, H), ox = out.getContext('2d');
+    ox.drawImage(card, 0, 0);
+    const mask = canvasOf(W, H), mx = mask.getContext('2d', { willReadFrequently: true });
+    const grow = Math.max(3, Math.round(W / 200));
+    for (let dy = -grow; dy <= grow; dy += grow) for (let dx = -grow; dx <= grow; dx += grow) {
+      mx.drawImage(char, x + dx, y + dy);
+    }
+    const w = Math.ceil(W / 4), sd = pixels(scaled(card, w)), sm = pixels(scaled(mask, w));
+    const h = Math.round((w * H) / W), N = w * h;
+    const hole = new Uint8Array(N), col = new Float32Array(N * 3);
+    for (let k = 0; k < N; k++) {
+      hole[k] = sm[k * 4 + 3] > 10 ? 1 : 0;
+      col[k * 3] = sd[k * 4]; col[k * 3 + 1] = sd[k * 4 + 1]; col[k * 3 + 2] = sd[k * 4 + 2];
+    }
+    const nb = [];
+    for (let it = 0; it < 400; it++) {
+      for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) {
+        const k = yy * w + xx;
+        if (!hole[k]) continue;
+        nb.length = 0;
+        if (xx > 0) nb.push(k - 1);
+        if (xx < w - 1) nb.push(k + 1);
+        if (yy > 0) nb.push(k - w);
+        if (yy < h - 1) nb.push(k + w);
+        let r = 0, g = 0, b = 0;
+        for (const q of nb) { r += col[q * 3]; g += col[q * 3 + 1]; b += col[q * 3 + 2]; }
+        col[k * 3] = r / nb.length; col[k * 3 + 1] = g / nb.length; col[k * 3 + 2] = b / nb.length;
+      }
+    }
+    const fill = canvasOf(w, h), fx = fill.getContext('2d'), fd = fx.createImageData(w, h);
+    for (let k = 0; k < N; k++) {
+      fd.data[k * 4] = col[k * 3]; fd.data[k * 4 + 1] = col[k * 3 + 1]; fd.data[k * 4 + 2] = col[k * 3 + 2]; fd.data[k * 4 + 3] = 255;
+    }
+    fx.putImageData(fd, 0, 0);
+    const patch = canvasOf(W, H), px = patch.getContext('2d');
+    px.drawImage(fill, 0, 0, W, H);
+    px.globalCompositeOperation = 'destination-in';
+    px.drawImage(mask, 0, 0);
+    ox.drawImage(patch, 0, 0);
+    return out;
+  }
+
+  // trim transparent margins, reporting where the trimmed part was
+  function trimAt(c) {
+    const { width: W, height: H } = c, d = pixels(c);
+    let a = W, b = H, e = -1, f = -1;
+    for (let y = 0; y < H; y++) for (let i = 0; i < W; i++) {
+      if (d[(y * W + i) * 4 + 3] > 10) { if (i < a) a = i; if (i > e) e = i; if (y < b) b = y; if (y > f) f = y; }
+    }
+    if (e < 0) return null;
+    return { canvas: trim(c), x: a, y: b };
+  }
+
+  return { loadImage, fit, cropCard, findWindow, windowCrop, segmenter, applyMask, eraseFromCard, trimAt, stylize, fadeBottom, toBlob };
 })();

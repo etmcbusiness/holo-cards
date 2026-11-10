@@ -123,16 +123,18 @@ body {
 }
 .place #placeArt { display: block; width: 100%; border-radius: 4.6% / 3.4%; }
 .place #placeChar { position: absolute; cursor: move; -webkit-user-drag: none; }
-.fadeLine {
-  position: absolute; left: -8px; right: -8px; height: 28px; margin-top: -14px;
-  cursor: ns-resize; touch-action: none;
-}
-.fadeLine::before {
-  content: ""; position: absolute; left: 0; right: 0; top: 13px; border-top: 2px dashed #ff4f8b;
-}
-.fadeLine span {
-  position: absolute; right: 0; top: 0; font-size: 11px; color: #fff; background: #ff4f8b;
-  border-radius: 6px; padding: 2px 6px;
-}
 .size { display: flex; align-items: center; gap: 10px; font-size: 15px; }
 .size input { flex: 1; }
+/* art window: dashed box; only its edges can be dragged */
+.place .win { position: absolute; z-index: 2; pointer-events: none; border: 2px dashed #ff4f8b; }
+.place .win i { position: absolute; pointer-events: auto; touch-action: none; }
+.place .win [data-edge=t], .place .win [data-edge=b] { left: 0; right: 0; height: 26px; cursor: ns-resize; }
+.place .win [data-edge=t] { top: -14px; }
+.place .win [data-edge=b] { bottom: -14px; }
+.place .win [data-edge=l], .place .win [data-edge=r] { top: 0; bottom: 0; width: 26px; cursor: ew-resize; }
+.place .win [data-edge=l] { left: -14px; }
+.place .win [data-edge=r] { right: -14px; }
+.row.tools { justify-content: flex-start; }
+.editor button#tapMode.removing { background: #8a2b45; border-color: #c2456a; }
+.place.working { opacity: .55; pointer-events: none; }
+.place #placeArt { touch-action: none; }

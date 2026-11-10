@@ -1,5 +1,8 @@
-// "Add card": pick a card (character removed) + the character, process the character
-// into the puffed style, place it on the card, and save it in this browser (IndexedDB).
+// "Add card": one photo of a card in, a holo card out. The card is cropped from its
+// background, the art window found, the character cut out with Segment Anything and
+// painted out of the card, given the puffed 3D style, and placed so it breaks out of the
+// frame. Tapping the preview adds or removes parts of the character.
+// Saved in this browser (IndexedDB).
 (() => {
   const $ = (id) => document.getElementById(id);
   const P = window.HoloProcess, app = window.HoloApp;
@@ -40,13 +43,14 @@
     URL.revokeObjectURL(c.art); URL.revokeObjectURL(c.pop.src);
   };
 
-  // ---------- step 1: pick images ----------
+  // ---------- step 1: one photo ----------
   const editor = $('editor'), status = $('pickStatus');
-  let artCanvas = null, charCanvas = null;
+  // made: { card, crop, x0, y0, seg, points, win {l,t,r,b} %, erased, char, pos {l,t,w} % }
+  let made = null, busy = false;
 
   function open() {
-    artCanvas = charCanvas = null;
-    $('fileArt').value = $('fileChar').value = $('cardName').value = '';
+    made = null;
+    $('fileCard').value = $('cardName').value = '';
     status.textContent = '';
     $('nextPick').disabled = true;
     $('stepPick').hidden = false; $('stepPlace').hidden = true;
@@ -60,88 +64,157 @@
   $('add').onclick = open;
   $('cancelPick').onclick = close;
 
-  const ready = () => { $('nextPick').disabled = !(artCanvas && charCanvas); };
   const paint = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 30))); // let the status show
+  const say = async (msg) => { status.textContent = msg; await paint(); };
 
-  $('fileArt').onchange = async (e) => {
+  $('fileCard').onchange = async (e) => {
     const f = e.target.files[0];
-    artCanvas = null; ready();
-    if (!f) return;
+    made = null; $('nextPick').disabled = true;
+    if (!f || busy) return;
+    busy = true;
     try {
-      artCanvas = P.cropCard(await P.loadImage(f));
       if (!$('cardName').value) $('cardName').value = f.name.replace(/\.[^.]+$/, '');
-    } catch (err) { status.textContent = err.message; }
-    ready();
+      await say('Finding the card…');
+      const card = P.cropCard(await P.loadImage(f));
+      const w = P.findWindow(card);
+      const { crop, x, y } = P.windowCrop(card, w);
+      await say('Looking at the art…');
+      const seg = await P.segmenter(crop, (frac) => {
+        status.textContent = `Downloading the cut-out tool (first time only)… ${Math.round(frac * 100)}%`;
+      });
+      made = {
+        card, crop, x0: x, y0: y, seg,
+        win: { l: w.l * 100, t: w.t * 100, r: w.r * 100, b: w.b * 100 },
+        points: [{ x: crop.width * 0.55, y: crop.height * 0.62, on: true }], // the character is usually here
+      };
+      await say('Cutting out the character…');
+      await rebuild();
+      status.textContent = 'Ready.';
+      $('nextPick').disabled = false;
+      showPlace();
+    } catch (err) {
+      console.error(err);
+      status.textContent = err.message || 'Something went wrong.';
+    } finally {
+      busy = false;
+    }
   };
 
-  $('fileChar').onchange = async (e) => {
-    const f = e.target.files[0];
-    charCanvas = null; ready();
-    if (!f) return;
-    try {
-      status.textContent = 'Removing the background…';
-      await paint();
-      const cut = P.cutout(await P.loadImage(f));
-      status.textContent = 'Adding the 3D shading…';
-      await paint();
-      charCanvas = P.stylize(cut);
-      status.textContent = 'Character ready.';
-    } catch (err) { status.textContent = err.message; }
-    ready();
-  };
+  // tap points -> mask -> character cut out, card painted over, 3D style, placement
+  async function rebuild() {
+    const mask = await made.seg(made.points);
+    const full = P.applyMask(made.crop, mask);
+    const cut = P.trimAt(full);
+    if (!cut) throw new Error('Could not find a character in the art. Try a straighter, closer photo.');
+    made.erased = P.eraseFromCard(made.card, full, made.x0, made.y0);
+    made.char = P.stylize(cut.canvas);
+    // where it was, in % of the card; then 10% bigger with its feet fixed, so it breaks out of the frame
+    const W = made.card.width, H = made.card.height;
+    const w0 = (made.char.width / W) * 100, l0 = ((made.x0 + cut.x) / W) * 100, t0 = ((made.y0 + cut.y) / H) * 100;
+    const h0 = (made.char.height / H) * 100, grow = 1.1;
+    made.pos = { w: w0 * grow, l: l0 + w0 / 2 - (w0 * grow) / 2, t: t0 + h0 - h0 * grow };
+  }
 
-  // ---------- step 2: place the character ----------
-  const place = $('place'), placeChar = $('placeChar'), fadeLine = $('fadeLine'), size = $('charSize');
-  let pos = null; // { l, t, w, fade } in % of the card
+  // ---------- step 2: check and adjust ----------
+  const place = $('place'), placeChar = $('placeChar'), winBox = $('win'), size = $('charSize');
+  let tapAdds = true;
 
-  $('nextPick').onclick = () => {
-    $('placeArt').src = artCanvas.toDataURL('image/jpeg', 0.9);
-    placeChar.src = charCanvas.toDataURL('image/png');
-    pos = { l: 3, t: 4, w: 94, fade: 50 };
-    size.value = pos.w;
+  function showPlace() {
+    $('placeArt').src = made.erased.toDataURL('image/jpeg', 0.9);
+    placeChar.src = made.char.toDataURL('image/png');
+    size.value = Math.round(made.pos.w);
     $('stepPick').hidden = true; $('stepPlace').hidden = false;
     requestAnimationFrame(render);
-  };
+  }
+  $('nextPick').onclick = showPlace;
   $('backPlace').onclick = () => { $('stepPick').hidden = false; $('stepPlace').hidden = true; };
 
   const charHeightPct = () => {
     const W = place.clientWidth, H = place.clientHeight;
-    return ((pos.w / 100) * W * (charCanvas.height / charCanvas.width) / H) * 100;
+    return ((made.pos.w / 100) * W * (made.char.height / made.char.width) / H) * 100;
   };
 
   function render() {
-    const H = place.clientHeight;
+    const { pos, win } = made, H = place.clientHeight;
     Object.assign(placeChar.style, { left: `${pos.l}%`, top: `${pos.t}%`, width: `${pos.w}%` });
-    fadeLine.style.top = `${pos.fade}%`;
-    // preview the fade on the character
-    const ch = (charHeightPct() / 100) * H, end = ((pos.fade - pos.t) / 100) * H;
-    const mask = `linear-gradient(to bottom, #000 ${end - 0.07 * ch}px, transparent ${end}px)`;
-    placeChar.style.webkitMaskImage = placeChar.style.maskImage = mask;
+    Object.assign(winBox.style, { left: `${win.l}%`, top: `${win.t}%`, width: `${win.r - win.l}%`, height: `${win.b - win.t}%` });
+    // preview the fade at the bottom of the art window
+    const ch = (charHeightPct() / 100) * H, end = ((win.b - pos.t) / 100) * H;
+    placeChar.style.webkitMaskImage = placeChar.style.maskImage =
+      `linear-gradient(to bottom, #000 ${end - 0.07 * ch}px, transparent ${end}px)`;
+    $('tapMode').textContent = tapAdds ? 'Tapping adds' : 'Tapping removes';
+    $('tapMode').classList.toggle('removing', !tapAdds);
   }
 
+  async function redo(change) {
+    if (busy) return;
+    busy = true; place.classList.add('working');
+    const before = made.points;
+    try {
+      change();
+      await paint();
+      await rebuild();
+      showPlace();
+    } catch (err) {
+      made.points = before;
+      alert(err.message);
+    } finally {
+      busy = false; place.classList.remove('working');
+    }
+  }
+
+  // tap on the card = add/remove that spot from the character
+  function tapAt(e) {
+    const r = place.getBoundingClientRect();
+    const x = ((e.clientX - r.left) / r.width) * made.card.width - made.x0;
+    const y = ((e.clientY - r.top) / r.height) * made.card.height - made.y0;
+    if (x < 0 || y < 0 || x >= made.crop.width || y >= made.crop.height) return; // outside the art window
+    redo(() => { made.points = [...made.points, { x, y, on: tapAdds }]; });
+  }
+  $('tapMode').onclick = () => { tapAdds = !tapAdds; render(); };
+  $('tapReset').onclick = () => redo(() => { made.points = made.points.slice(0, 1); });
+
+  // drags move things; a press without movement counts as a tap
   function dragger(el, onMove) {
-    let last = null;
+    let last = null, moved = 0;
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault(); e.stopPropagation();
       el.setPointerCapture(e.pointerId);
-      last = { x: e.clientX, y: e.clientY };
+      last = { x: e.clientX, y: e.clientY }; moved = 0;
     });
     el.addEventListener('pointermove', (e) => {
       if (!last) return;
-      onMove((e.clientX - last.x) / place.clientWidth * 100, (e.clientY - last.y) / place.clientHeight * 100);
+      const dx = e.clientX - last.x, dy = e.clientY - last.y;
+      moved += Math.abs(dx) + Math.abs(dy);
+      if (moved < 6) return;
+      onMove((dx / place.clientWidth) * 100, (dy / place.clientHeight) * 100);
       last = { x: e.clientX, y: e.clientY };
       render();
     });
-    const end = () => { last = null; };
-    el.addEventListener('pointerup', end);
-    el.addEventListener('pointercancel', end);
+    el.addEventListener('pointerup', (e) => {
+      if (last && moved < 6) tapAt(e);
+      last = null;
+    });
+    el.addEventListener('pointercancel', () => { last = null; });
   }
-  dragger(placeChar, (dx, dy) => { pos.l += dx; pos.t += dy; });
-  dragger(fadeLine, (dx, dy) => { pos.fade = Math.min(100, Math.max(5, pos.fade + dy)); });
+  dragger(placeChar, (dx, dy) => { made.pos.l += dx; made.pos.t += dy; });
+  dragger($('placeArt'), () => {});
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  for (const edge of winBox.querySelectorAll('[data-edge]')) {
+    const k = edge.dataset.edge;
+    dragger(edge, (dx, dy) => {
+      const w = made.win;
+      if (k === 't') w.t = clamp(w.t + dy, 0, w.b - 5);
+      if (k === 'b') w.b = clamp(w.b + dy, w.t + 5, 100);
+      if (k === 'l') w.l = clamp(w.l + dx, 0, w.r - 5);
+      if (k === 'r') w.r = clamp(w.r + dx, w.l + 5, 100);
+    });
+  }
   size.oninput = () => {
-    const centre = pos.l + pos.w / 2;
-    pos.w = +size.value;
-    pos.l = centre - pos.w / 2;
+    const p = made.pos, centre = p.l + p.w / 2, feet = p.t + charHeightPct();
+    p.w = +size.value;
+    p.l = centre - p.w / 2;
+    p.t = feet - charHeightPct();
     render();
   };
 
@@ -149,15 +222,15 @@
     const btn = $('savePlace');
     btn.disabled = true; btn.textContent = 'Saving…';
     try {
-      const h = charHeightPct();
-      const pop = P.fadeBottom(charCanvas, (pos.fade - pos.t) / h);
+      const { pos, win } = made, h = charHeightPct();
+      const pop = P.fadeBottom(made.char, (win.b - pos.t) / h);
       const rec = {
         id: Date.now().toString(36),
         name: $('cardName').value.trim() || 'My card',
-        art: await P.toBlob(artCanvas, 'image/jpeg', 0.9),
+        art: await P.toBlob(made.erased, 'image/jpeg', 0.9),
         pop: await P.toBlob(pop, 'image/png'),
         box: [pos.l, pos.t, pos.w, h],
-        holo: [8, 10, 84, Math.max(5, Math.min(pos.fade, 95) - 10)], // glitter: the art window above the fade line
+        holo: [win.l, win.t, win.r - win.l, win.b - win.t],
       };
       await req('readwrite', (s) => s.put(rec));
       app.add(toCard(rec), true);

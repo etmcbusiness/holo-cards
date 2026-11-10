@@ -25,7 +25,7 @@
   }
 
   const toCard = (rec) => ({
-    id: rec.id, name: rec.name, holo: rec.holo,
+    id: rec.id, name: rec.name, holo: rec.holo, glitter: rec.glitter,
     art: URL.createObjectURL(rec.art),
     pop: { src: URL.createObjectURL(rec.pop), box: rec.box },
   });
@@ -75,15 +75,28 @@
       await say('Splitting the card and the character…');
       const split = P.splitLayered(await P.loadImage(f));
       if (!split) throw new Error('Use one image with the card (character removed) on one side and the cut-out character on the other.');
+      await say('Lining it up…');
+      const card = split.card, aspect = split.char.height / split.char.width;
+      const hOf = (wPct) => (wPct / 100) * card.width * aspect / card.height * 100;
+      const w = P.findWindow(card);
+      const win = { l: w.l * 100, t: w.t * 100, r: w.r * 100, b: w.b * 100 };
+      // If the card still shows the character, sit on top of it 12% bigger (it covers the
+      // original and breaks out of the frame); otherwise centre it on the art window,
+      // 8% wider than the window.
+      const at = P.locate(card, split.char);
+      let pos;
+      if (at) {
+        const w0 = at.w * 100, cx = at.x * 100 + w0 / 2, cy = at.y * 100 + hOf(w0) / 2, w1 = w0 * 1.12;
+        pos = { w: w1, l: cx - w1 / 2, t: cy - hOf(w1) / 2 };
+      } else {
+        const w1 = (win.r - win.l) * 1.08;
+        pos = { w: w1, l: (win.l + win.r) / 2 - w1 / 2, t: (win.t + win.b) / 2 - hOf(w1) / 2 };
+      }
+      const glitter = P.glitterFor(card, w);
+      $('holo').checked = glitter.holo;
       await say('Adding the 3D shading…');
       const char = P.stylize(split.char);
-      const w = P.findWindow(split.card);
-      const win = { l: w.l * 100, t: w.t * 100, r: w.r * 100, b: w.b * 100 };
-      // centre it on the art window, 8% wider than the window, so it breaks out of the frame
-      const wPct = (win.r - win.l) * 1.08;
-      const hPct = (wPct / 100) * split.card.width * (char.height / char.width) / split.card.height * 100;
-      const pos = { w: wPct, l: (win.l + win.r) / 2 - wPct / 2, t: (win.t + win.b) / 2 - hPct / 2 };
-      made = { card: split.card, char, pos, win };
+      made = { card, char, pos, win, hues: glitter.hues };
       status.textContent = 'Ready.';
       $('nextPick').disabled = false;
       showPlace();
@@ -173,6 +186,7 @@
         pop: await P.toBlob(pop, 'image/png'),
         box: [pos.l, pos.t, pos.w, h],
         holo: [win.l, win.t, win.r - win.l, win.b - win.t],
+        glitter: $('holo').checked ? made.hues : false,
       };
       await req('readwrite', (s) => s.put(rec));
       app.add(toCard(rec), true);

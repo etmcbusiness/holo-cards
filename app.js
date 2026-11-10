@@ -15,6 +15,7 @@
       pop.classList.remove('on');
       art.alt = c.name;
       art.src = c.art;
+      card.classList.toggle('matte', c.glitter === false); // no foil on non-holo cards
       document.title = c.name;
       renderControls();
     }, 200);
@@ -121,26 +122,29 @@
   // card's art window. The glitter sits at different depths and slides with the tilt
   // far more than the card turns; that's what makes it feel 3D.
   let stars = [], glitter = [];
-  const GLITTER_COLORS = [190, 300, 50, 160, 330, 210];
+  const GLITTER_COLORS = [190, 300, 50, 160, 330, 210]; // when a card doesn't name its own
   function sizeSparkles() {
     const dpr = Math.min(devicePixelRatio || 1, 2);
     canvas.width = canvas.clientWidth * dpr;
     canvas.height = canvas.clientHeight * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const area = canvas.clientWidth * canvas.clientHeight;
+    const c = cards[index];
+    if (c.glitter === false) { stars = []; glitter = []; return; } // not a holo card
+    const hues = c.glitter || GLITTER_COLORS;
     stars = Array.from({ length: Math.round(area / 9000) }, () => ({
       x: Math.random(), y: Math.random(),
       r: 3 + Math.random() ** 2 * 7,
       speed: 0.6 + Math.random() * 1.5,
       phase: Math.random() * Math.PI * 2,
-      hue: Math.random() < 0.6 ? 50 : Math.random() * 360,
+      hue: Math.random() < 0.6 ? 50 : hues[(Math.random() * hues.length) | 0],
       depth: 0.3 + Math.random(),
     }));
     glitter = Array.from({ length: Math.round(area / 160) }, () => ({
       x: Math.random(), y: Math.random(),
       r: 1 + Math.random() ** 2 * 2.6,
       depth: Math.random() ** 1.5,          // 0 = near the card, 1 = deep behind it
-      hue: GLITTER_COLORS[(Math.random() * GLITTER_COLORS.length) | 0],
+      hue: hues[(Math.random() * hues.length) | 0],
       speed: 1 + Math.random() * 3,
       phase: Math.random() * Math.PI * 2,
     }));

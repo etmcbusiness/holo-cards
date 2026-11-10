@@ -135,3 +135,4 @@ body {
 .place .win [data-edge=l] { left: -14px; }
 .place .win [data-edge=r] { right: -14px; }
 .place #placeArt { touch-action: none; }
+.card.matte .holo { display: none; }

@@ -28,6 +28,7 @@ window.HoloAI = (() => {
   const setKey = (k) => { try { k ? localStorage.setItem(KEY, k.trim()) : localStorage.removeItem(KEY); } catch {} };
 
   class KeyError extends Error {}
+  const log = []; // Gemini's answers for the current card (debug copy)
 
   // POST to the first model that works; returns the first candidate as { parts, grounding }
   // body: the request, or (model) => request when it differs per model
@@ -54,6 +55,12 @@ window.HoloAI = (() => {
         throw new Error(msg);
       }
       const c = json.candidates?.[0];
+      // keep what Gemini said for the debug copy (never the key); images are left out
+      const req = typeof body === 'function' ? body(model) : body;
+      log.push({
+        model, ask: (req.contents?.[0]?.parts?.[0]?.text || '').slice(0, 40), finish: c?.finishReason,
+        text: (c?.content?.parts || []).map((p) => p.text || (p.inlineData || p.inline_data ? '[image]' : '')).join('').slice(0, 60000),
+      });
       return { parts: c?.content?.parts || [], grounding: c?.groundingMetadata };
     }
     throw lastErr;
@@ -268,5 +275,5 @@ window.HoloAI = (() => {
     };
   }
 
-  return { getKey, setKey, layered, identify, inspect, segment, value, KeyError };
+  return { getKey, setKey, layered, identify, inspect, segment, value, KeyError, log };
 })();

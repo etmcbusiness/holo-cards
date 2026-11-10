@@ -127,12 +127,15 @@
   $('keyCancel').onclick = () => { $('stepKey').hidden = true; close(); };
 
   let slab = false; // the photo is a graded card in its case
+  const debugNotes = []; // what the app did with Gemini's answers (debug copy)
+  const note = (k, v) => debugNotes.push({ [k]: v });
   let pending = null; // the photo being processed, kept so a new key can retry it
   $('fileCard').onchange = (e) => { const f = e.target.files[0]; if (f) build(f); };
 
   async function build(f) {
     if (busy) return;
     busy = true; made = null; pending = f; slab = false;
+    AI.log.length = 0; debugNotes.length = 0;
     try {
       fillInfo({});
       await say('Looking at the photo…');
@@ -160,6 +163,7 @@
         const four = (q) => Array.isArray(q) && q.length === 4 && q.every((p) => p?.length === 2);
         slab = !!(info?.slab || info?.grading?.company); // a grade label means it is in a slab
         const ratio = /yu-?gi-?oh/i.test(info?.game || '') ? 59 / 86 : 63 / 88;
+        note('photo', [img.naturalWidth, img.naturalHeight]); note('slab', slab);
         const card = slab ? (four(info.slab_corners) ? P.straighten(img, info.slab_corners, null) : P.cropCard(img))
           : ok ? P.straighten(img, info.corners, ratio) : P.cropCard(img);
         // Gemini outlines the character; it's cut from the card's own pixels (nothing redrawn)
@@ -259,6 +263,13 @@
     }
     showFx(masks.fx ? withFx : null);
     const char = P.maskCut(card, mask), o = char.offset;
+    note('card', [card.width, card.height]); note('cutout', [char.width, char.height, o]);
+    { // how solid the cut-out is
+      const d = char.getContext('2d').getImageData(0, 0, char.width, char.height).data;
+      let solid = 0, part = 0;
+      for (let k = 3; k < d.length; k += 4) { if (d[k] > 240) solid++; else if (d[k] > 10) part++; }
+      note('alpha', { solid, part });
+    }
     const w = layout?.win ? { l: layout.win.l / 100, t: layout.win.t / 100, r: layout.win.r / 100, b: layout.win.b / 100 } : P.findWindow(card);
     const w0 = (char.width / card.width) * 100, h0 = (char.height / card.height) * 100, w1 = w0 * 1.03;
     const cx = (o.x / card.width) * 100 + w0 / 2, cy = (o.y / card.height) * 100 + h0 / 2;
@@ -320,6 +331,13 @@
     }
     return split;
   }
+
+  // copy Gemini's answers and what was done with them, to paste into a bug report
+  $('copyDebug').onclick = async () => {
+    const text = JSON.stringify({ when: new Date().toISOString(), ua: navigator.userAgent, notes: debugNotes, gemini: AI.log }, null, 1);
+    try { await navigator.clipboard.writeText(text); $('copyDebug').textContent = 'Copied! Paste it in the chat'; }
+    catch { prompt('Copy this:', text.slice(0, 20000)); }
+  };
 
   // editor button: redo the separation with the better (pricier) model
   $('redoBest').onclick = async () => {

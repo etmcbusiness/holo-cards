@@ -62,34 +62,20 @@ body {
   background-position: calc(var(--px) * 9px) 0;
 }
 
-/* the character, floating in front of the card */
+/* the character: a curved surface made of strips (built in app.js), just in front of the card.
+   The fade where it enters the card is baked into its PNG. */
 .pop {
   position: absolute; display: none; pointer-events: none;
-  overflow: hidden; /* hides the part below the cut line */
-  /* fade into the card at the cut line instead of a hard edge */
-  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 9%), transparent);
-          mask-image: linear-gradient(to bottom, #000 calc(100% - 9%), transparent);
-  transform: translateZ(22px);
+  transform: translateZ(16px);
+  transform-style: preserve-3d;
 }
 .pop.on { display: block; }
-.pop .float { position: absolute; }
-.pop.bob .float { animation: bob 3.4s ease-in-out infinite; }
-.pop img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
-#popImg {
-  filter: drop-shadow(calc(var(--px) * -10px + 4px) calc(var(--py) * -10px + 10px) 7px rgba(0,0,0,.5));
+.pop i {
+  position: absolute; top: 0; height: 100%;
+  background-image: var(--pop-src);
+  background-repeat: no-repeat;
+  backface-visibility: hidden;
 }
-/* stacked copies behind the character, each a step further out and a little darker:
-   reads as the curved side of a solid shape, showing more as the card tilts */
-.pop .ghost { --s: 1; transform: translate(calc(var(--px) * var(--s) * -5px), calc(var(--py) * var(--s) * -4px)); }
-.pop .g1 { --s: .34; filter: brightness(.88) blur(.3px); }
-.pop .g2 { --s: .67; filter: brightness(.74) blur(.5px); }
-.pop .g3 { --s: 1;   filter: brightness(.6) blur(.7px); }
-/* stripes only where the character is */
-.pop .stripes {
-  -webkit-mask: var(--pop-src) center / 100% 100% no-repeat;
-          mask: var(--pop-src) center / 100% 100% no-repeat;
-}
-@keyframes bob { 50% { transform: translateY(-2%) rotate(-.8deg); } }
 
 .controls {
   height: 70px; display: flex; align-items: center; justify-content: center; gap: 18px;
@@ -104,6 +90,3 @@ body {
 .dots i.on { background: #eee; }
 .motion { position: fixed; top: calc(12px + env(safe-area-inset-top)); right: 12px; }
 
-@media (prefers-reduced-motion: reduce) {
-  .pop.bob .float { animation: none; }
-}

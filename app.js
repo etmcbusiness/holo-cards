@@ -1,6 +1,6 @@
 (() => {
   const $ = (id) => document.getElementById(id);
-  const stage = $('stage'), card = $('card'), art = $('art'), pop = $('pop'), popImg = $('popImg');
+  const stage = $('stage'), card = $('card'), art = $('art'), pop = $('pop');
   const canvas = $('sparkles'), ctx = canvas.getContext('2d');
   const cards = window.CARDS;
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -28,23 +28,28 @@
     for (let el = art; el && el !== card; el = el.offsetParent) { x += el.offsetLeft; y += el.offsetTop; }
     const [l, t, w, h] = c.pop.box;
     const W = art.offsetWidth, H = art.offsetHeight;
-    const pw = (w / 100) * W, ph = (h / 100) * H, pad = ph * 0.1; // pad: room above for the bob
-    const left = x + (l / 100) * W, top = y + (t / 100) * H;
-    // the box ends at the cut line and hides what's below it (overflow, not clip-path: Safari flickers with clip-path in 3D)
-    const bottom = c.pop.cut == null ? top + ph + pad : y + (c.pop.cut / 100) * H;
+    const pw = (w / 100) * W, ph = (h / 100) * H;
     Object.assign(pop.style, {
-      left: `${left - pad}px`, top: `${top - pad}px`,
-      width: `${pw + 2 * pad}px`, height: `${bottom - top + pad}px`,
+      left: `${x + (l / 100) * W}px`, top: `${y + (t / 100) * H}px`, width: `${pw}px`, height: `${ph}px`,
     });
-    Object.assign(pop.firstElementChild.style, {
-      left: `${pad}px`, top: `${pad}px`, width: `${pw}px`, height: `${ph}px`,
-    });
-    if (popImg.getAttribute('src') !== c.pop.src) {
-      popImg.src = c.pop.src;
-      pop.querySelectorAll('.ghost').forEach((g) => { g.src = c.pop.src; });
-      pop.style.setProperty('--pop-src', `url("${c.pop.src}")`);
+    // Bend the cut-out onto a shallow cylinder bulging toward the viewer: thin vertical
+    // strips, each turned to follow the curve. Face-on it looks flat; as the card tilts
+    // the strips foreshorten unevenly, so it reads as a rounded surface.
+    const N = 24, BEND = (32 * Math.PI) / 180;          // half-angle of the curve
+    const R = pw / 2 / Math.sin(BEND), slice = pw / N;
+    let html = '';
+    for (let i = 0; i < N; i++) {
+      const cx = (i + 0.5) * slice - pw / 2;          // strip centre, from the middle
+      const a = Math.asin(cx / R);
+      const z = R * (Math.cos(a) - Math.cos(BEND));
+      const k = 1 / Math.cos(a);                        // widen so its projection is one slice
+      const sw = slice * k;
+      html += `<i style="left:${cx + pw / 2 - sw / 2 - 1}px;width:${sw + 2}px;` +
+        `background-size:${pw * k}px ${ph}px;background-position:${1 - i * slice * k}px 0;` +
+        `transform:translateZ(${z.toFixed(2)}px) rotateY(${a.toFixed(4)}rad)"></i>`;
     }
-    pop.classList.toggle('bob', !!c.pop.float);
+    pop.innerHTML = html;
+    pop.style.setProperty('--pop-src', `url("${c.pop.src}")`);
     pop.classList.add('on');
   }
 

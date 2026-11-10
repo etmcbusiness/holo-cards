@@ -25,7 +25,7 @@
   }
 
   const toCard = (rec) => ({
-    id: rec.id, name: rec.name, info: rec.info, holo: rec.holo, glitter: rec.glitter, style: rec.style, ambience: rec.ambience,
+    id: rec.id, name: rec.name, info: rec.info, holo: rec.holo, glitter: rec.glitter, style: rec.style, ambience: rec.ambience, slab: rec.slab,
     art: URL.createObjectURL(rec.art),
     pop: { src: URL.createObjectURL(rec.pop), box: rec.box },
   });
@@ -126,12 +126,13 @@
   };
   $('keyCancel').onclick = () => { $('stepKey').hidden = true; close(); };
 
+  let slab = false; // the photo is a graded card in its case
   let pending = null; // the photo being processed, kept so a new key can retry it
   $('fileCard').onchange = (e) => { const f = e.target.files[0]; if (f) build(f); };
 
   async function build(f) {
     if (busy) return;
-    busy = true; made = null; pending = f;
+    busy = true; made = null; pending = f; slab = false;
     try {
       fillInfo({});
       await say('Looking at the photo…');
@@ -154,7 +155,9 @@
         info = await identify(P.fit(img, 1600));
         // straighten and crop it exactly using the corners Gemini found, else trim plain borders
         const ok = Array.isArray(info?.corners) && info.corners.length === 4 && info.corners.every((p) => p?.length === 2);
-        const ratio = /yu-?gi-?oh/i.test(info?.game || '') ? 59 / 86 : 63 / 88;
+        // a graded card keeps its whole case and label: measure the slab's shape from the photo
+        slab = !!(info?.slab && ok);
+        const ratio = slab ? null : /yu-?gi-?oh/i.test(info?.game || '') ? 59 / 86 : 63 / 88;
         const card = ok ? P.straighten(img, info.corners, ratio) : P.cropCard(img);
         // Gemini outlines the character; it's cut from the card's own pixels (nothing redrawn)
         await say('Finding the character…');
@@ -414,6 +417,7 @@
         glitter: made.hues,
         style: holoKind, // holo, reverse or none; the ✨ button on the main screen changes it
         ambience: made.ambience, // the background animation (app.js picks one from the colours when null)
+        slab, // shown in its graded case
       };
       await req('readwrite', (s) => s.put(rec));
       const c = toCard(rec);

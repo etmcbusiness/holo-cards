@@ -93,7 +93,9 @@ window.HoloAI = (() => {
     'Give the game or sport, its exact printed name (as on the card; for a sports card the player), the set it is from, the year that set was released, ' +
     'the card number (like 4/102), the edition or print (for example "1st Edition", "Shadowless", "Unlimited", "Japanese", or "" if none), ' +
     'and its foil: "holo" if the artwork is holographic, "reverse" if the card is foil everywhere except the artwork, or "none". ' +
-    'Use "" for anything you cannot tell. Also give corners: the four corners of the card itself (inside any sleeve, top-loader or graded slab) in this image as [x, y] on a 0-1000 scale ' +
+    'Use "" for anything you cannot tell. slab: true if the card is sealed in a graded slab (PSA, BGS, CGC, SGC... case with a grade label). ' +
+    'Also give corners: the four outer corners in this image as [x, y] on a 0-1000 scale: of the whole slab including its label if it is in a graded slab, ' +
+    'otherwise of the card itself (inside any sleeve or top-loader); ' +
     '(x across, y down), in the order top-left, top-right, bottom-right, bottom-left of the card. ' +
     'grading: if the card is in a graded slab, the grading company (PSA, BGS, CGC, SGC, TAG...), the grade on its label (like "9" or "9.5") and the cert number; otherwise all "". ' +
     'condition: your honest estimate of the grade PSA would give this card (1-10), judging centering, corners, edges and surface as well as the photo allows, ' +
@@ -107,7 +109,7 @@ window.HoloAI = (() => {
         responseSchema: {
           type: 'OBJECT',
           properties: {
-            game: { type: 'STRING' }, name: { type: 'STRING' }, set: { type: 'STRING' }, year: { type: 'STRING' },
+            slab: { type: 'BOOLEAN' }, game: { type: 'STRING' }, name: { type: 'STRING' }, set: { type: 'STRING' }, year: { type: 'STRING' },
             number: { type: 'STRING' }, edition: { type: 'STRING' },
             foil: { type: 'STRING', enum: ['holo', 'reverse', 'none'] },
             corners: { type: 'ARRAY', items: { type: 'ARRAY', items: { type: 'NUMBER' } } },

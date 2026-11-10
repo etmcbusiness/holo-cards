@@ -31,10 +31,18 @@ body {
 .card .face, .card .pop i { transition: opacity .2s ease; }
 .card.swap .face, .card.swap .pop i { opacity: 0; }
 
+/* Rounded like a real card. Safari ignores overflow + border-radius for the moving layers inside
+   a 3D card, so the corners are cut with clip-path (and the shadow sits on a layer behind). */
+.card { --round: 4.6% / 3.4%; }
+.card.slab { --round: 3% / 1.8%; } /* graded slab: tighter corners */
 .face {
   position: relative; overflow: hidden;
-  border-radius: 4.6% / 3.4%;
+  border-radius: var(--round);
+  clip-path: inset(0 round var(--round));
   isolation: isolate; /* blend modes below don't apply inside the 3D card without this */
+}
+.card::before {
+  content: ''; position: absolute; inset: 0; border-radius: var(--round);
   box-shadow: 0 30px 60px -20px rgba(0,0,0,.85);
 }
 .art { display: block; width: 100%; filter: saturate(1.1); }

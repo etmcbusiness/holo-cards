@@ -296,7 +296,8 @@ window.HoloProcess = (() => {
   // `corners`: rough [x, y] corners on a 0-1000 scale (top-left, top-right, bottom-right,
   // bottom-left), e.g. from Gemini. Each side is snapped onto the strongest straight edge
   // near it, the sides are intersected for exact corners, and the card is warped flat.
-  // ratio: width / height of this kind of card (most are 63 x 88 mm; Yu-Gi-Oh is 59 x 86)
+  // ratio: width / height of this kind of card (most are 63 x 88 mm; Yu-Gi-Oh is 59 x 86), or
+  // null to measure it from the photo (graded slabs differ by company)
   function straighten(img, corners, ratio = 63 / 88) {
     const src = fit(img, 1600), W = src.width, H = src.height;
     let quad = corners.map(([x, y]) => [(x / 1000) * W, (y / 1000) * H]);
@@ -304,6 +305,11 @@ window.HoloProcess = (() => {
     // pull in a hair so no sliver of the table or screen shows along the edges
     const cx = quad.reduce((s, p) => s + p[0], 0) / 4, cy = quad.reduce((s, p) => s + p[1], 0) / 4;
     quad = quad.map(([x, y]) => [x + (cx - x) * 0.012, y + (cy - y) * 0.012]);
+    if (!ratio) {
+      const d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+      ratio = (d(quad[0], quad[1]) + d(quad[3], quad[2])) / (d(quad[0], quad[3]) + d(quad[1], quad[2]));
+      ratio = Math.min(0.75, Math.max(0.5, ratio));
+    }
     const outH = 1200, outW = Math.round(outH * ratio);
     return warp(src, quad, outW, outH);
   }

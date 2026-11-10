@@ -27,4 +27,11 @@ window.CARDS = [
     glitter: [45, 15],
     pop: { src: 'cards/base-charizard-pop.png', box: [7.4, 12.1, 85.1, 42.3] },
   },
+  {
+    name: 'Charizard ★ δ',
+    art: 'cards/star-charizard.jpg',
+    holo: [7.3, 9.4, 86, 36.7],
+    glitter: [155, 35, 5, 215],
+    pop: { src: 'cards/star-charizard-pop.png', box: [0.8, 8.2, 98.1, 42.9] },
+  },
 ];

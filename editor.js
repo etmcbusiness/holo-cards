@@ -25,7 +25,7 @@
   }
 
   const toCard = (rec) => ({
-    id: rec.id, name: rec.name, holo: rec.holo, glitter: rec.glitter, style: rec.style,
+    id: rec.id, name: rec.name, info: rec.info, holo: rec.holo, glitter: rec.glitter, style: rec.style,
     art: URL.createObjectURL(rec.art),
     pop: { src: URL.createObjectURL(rec.pop), box: rec.box },
   });
@@ -77,6 +77,14 @@
   }
   $('holoToggle').onclick = () => setHolo(KINDS[(KINDS.indexOf(holoKind) + 1) % KINDS.length]);
 
+  // card details: filled in from Gemini's reading of the card, editable before saving
+  const INFO_FIELDS = { set: 'cardSet', year: 'cardYear', number: 'cardNumber', edition: 'cardEdition' };
+  function fillInfo(info) {
+    $('cardName').value = info.name || '';
+    for (const [k, id] of Object.entries(INFO_FIELDS)) $(id).value = info[k] || '';
+  }
+  const readInfo = () => Object.fromEntries(Object.entries(INFO_FIELDS).map(([k, id]) => [k, $(id).value.trim()]));
+
   // one-time Gemini key screen; resolves once a key is saved
   let keyWaiter = null;
   function askForKey(msg) {
@@ -103,13 +111,22 @@
     if (busy) return;
     busy = true; made = null; pending = f;
     try {
-      $('cardName').value = '';
+      fillInfo({});
       await say('Looking at the photo…');
       const img = await P.loadImage(f);
-      // Already split (card + cut-out side by side)? No AI needed.
+      // Already split (card + cut-out side by side)? No image AI needed.
       const split = P.splitLayered(img);
+      if (!split && !AI.getKey()) await askForKey();
+      // read the card's name, set etc. alongside (a cheap text call; skipped without a key)
+      const idCard = split ? split.card : P.cropCard(img);
+      const id = AI.getKey() ? AI.identify(idCard).catch((e) => { console.warn('Could not identify the card:', e); return null; }) : null;
       made = split ? fromSplit(split) : await fromPhoto(img);
       showPlace();
+      const info = await id;
+      if (info && made) {
+        fillInfo(info);
+        if (['holo', 'reverse', 'none'].includes(info.foil)) setHolo(info.foil);
+      }
     } catch (err) {
       console.error(err);
       if (err instanceof AI.KeyError) {
@@ -258,6 +275,7 @@
       const rec = {
         id: Date.now().toString(36),
         name: $('cardName').value.trim() || `Card ${new Date().toLocaleDateString()}`,
+        info: readInfo(), // set, year, number, edition
         art: await P.toBlob(made.card, 'image/jpeg', 0.9),
         pop: await P.toBlob(pop, 'image/png'),
         box: [pos.l, pos.t, pos.w, h],

@@ -1,7 +1,8 @@
 // Built-in cards. Add one entry per card and drop its images in cards/.
 // (Cards can also be added from the page with "+ Add card"; those stay on that device.)
 //
-//   name     used for the page title and alt text
+//   name     the card's name, shown under the card
+//   info     { set, year, number, edition }, shown under the name
 //   art      the card scan (any size)
 //   holo     [left, top, width, height] in % of the card: the art window, where the
 //            hologram glitter goes
@@ -17,7 +18,8 @@
 //                   100 to stick out past the edge
 window.CARDS = [
   {
-    name: 'Crystal Charizard',
+    name: 'Charizard',
+    info: { set: 'Skyridge', year: '2003', number: '146/144', edition: 'Crystal' },
     art: 'cards/crystal-charizard.jpg',
     holo: [10, 11.8, 86, 36.6],
     glitter: [45, 225, 195, 15],
@@ -25,7 +27,8 @@ window.CARDS = [
     pop: { src: 'cards/crystal-charizard-pop.png', box: [1, 4.4, 93.7, 68.3] },
   },
   {
-    name: 'Base Set Charizard',
+    name: 'Charizard',
+    info: { set: 'Base Set', year: '1999', number: '4/102', edition: 'Unlimited' },
     art: 'cards/base-charizard.jpg',
     holo: [11.3, 11.1, 79, 40.7],
     glitter: [45, 15],
@@ -34,6 +37,7 @@ window.CARDS = [
   },
   {
     name: 'Charizard ★ δ',
+    info: { set: 'Dragon Frontiers', year: '2006', number: '100/101', edition: '' },
     art: 'cards/star-charizard.jpg',
     holo: [7.3, 9.4, 86, 36.7],
     glitter: [155, 35, 5, 215],

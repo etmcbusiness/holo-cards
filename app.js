@@ -17,6 +17,9 @@
       art.src = c.art;
       applyStyle();
       document.title = c.name;
+      const i = c.info || {};
+      $('caption').querySelector('b').textContent = c.name;
+      $('caption').querySelector('span').textContent = [i.set, i.year, i.number, i.edition].filter(Boolean).join(' · ');
       renderControls();
     }, 200);
   }
@@ -125,7 +128,7 @@
   const STYLES = ['holo', 'reverse', 'none'];
   const STYLE_NAMES = { holo: 'Holo', reverse: 'Reverse holo', none: 'Non-holo' };
   const GLITTER_COLORS = [190, 300, 50, 160, 330, 210]; // when a card doesn't name its own
-  const styleKey = (c) => `holo-kind:${c.id || c.name}`;
+  const styleKey = (c) => `holo-kind:${c.id || `${c.name}|${c.info?.number || ""}`}`;
   function styleOf(c) {
     let saved = null;
     try { saved = localStorage.getItem(styleKey(c)); } catch {}

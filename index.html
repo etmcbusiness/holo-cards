@@ -28,6 +28,7 @@
     </div>
   </main>
 
+  <div class="caption" id="caption"><b></b><span></span></div>
   <button id="styleBtn" class="style-btn">✨ Holo</button>
 
   <nav class="controls">
@@ -68,7 +69,13 @@
       <p class="hint">Drag the character to move it. Drag the dashed box edges to fit the art window.</p>
       <label class="size">Size <input type="range" id="charSize" min="20" max="160" value="94"></label>
       <button class="big toggle" id="holoToggle" aria-pressed="true">✨ Holo (tap to change)</button>
-      <input type="text" id="cardName" placeholder="Card name (optional)">
+      <div class="info">
+        <input type="text" id="cardName" placeholder="Card name">
+        <input type="text" id="cardSet" placeholder="Set">
+        <input type="text" id="cardYear" placeholder="Year" inputmode="numeric">
+        <input type="text" id="cardNumber" placeholder="Number (e.g. 4/102)">
+        <input type="text" id="cardEdition" placeholder="Edition (e.g. 1st Edition)">
+      </div>
       <button class="big primary" id="savePlace">Save card</button>
       <button class="big" id="backPlace">Cancel</button>
     </div>

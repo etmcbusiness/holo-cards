@@ -31,7 +31,7 @@
   });
 
   req('readonly', (s) => s.getAll())
-    .then((recs) => recs.forEach((r) => app.add(toCard(r), false)))
+    .then((recs) => recs.filter((r) => !r.id.startsWith('ai:')).forEach((r) => app.add(toCard(r), false))) // ai: = kept Gemini results
     .catch((e) => console.warn('Saved cards unavailable:', e));
 
   $('remove').onclick = async () => {
@@ -150,7 +150,23 @@
     await say('Finding the card…');
     const card = P.cropCard(img);
     await say('Gemini is separating the character from the card… (about 20 seconds)');
-    const { erased, characterOnWhite } = await AI.separate(card);
+    // Gemini's answer for this photo is kept, so trying the same photo again costs nothing
+    const cacheId = `ai:${pending.name}:${pending.size}:${pending.lastModified}`;
+    let erased, characterOnWhite;
+    const hit = await req('readonly', (s) => s.get(cacheId)).catch(() => null);
+    if (hit) {
+      [erased, characterOnWhite] = await Promise.all([hit.erased, hit.character].map(async (b) => {
+        const img2 = await P.loadImage(new File([b], 'x.png'));
+        const out = document.createElement('canvas');
+        out.width = card.width; out.height = card.height;
+        out.getContext('2d', { willReadFrequently: true }).drawImage(img2, 0, 0, card.width, card.height);
+        return out;
+      }));
+    } else {
+      ({ erased, characterOnWhite } = await AI.separate(card));
+      const keep = { id: cacheId, erased: await P.toBlob(erased, 'image/png'), character: await P.toBlob(characterOnWhite, 'image/png') };
+      await req('readwrite', (s) => s.put(keep)).catch((e) => console.warn('Could not keep the Gemini result:', e));
+    }
     await say('Adding the 3D shading…');
     const cut = P.cutout(characterOnWhite, { minPiece: 0.002 });
     const hOf = hOfFor(card, cut);

@@ -442,5 +442,5 @@ window.HoloProcess = (() => {
     return { l: l / W, t: t / H, r: r / W, b: b / H };
   }
 
-  return { loadImage, fit, cropCard, splitLayered, locate, findWindow, glitterFor, stylize, fadeBottom, toBlob };
+  return { loadImage, fit, cutout, cropCard, splitLayered, locate, findWindow, glitterFor, stylize, fadeBottom, toBlob };
 })();

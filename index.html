@@ -39,6 +39,15 @@
   <!-- add-a-card flow (editor.js): "+ Add card" opens the photo picker straight away -->
   <input type="file" id="fileCard" accept="image/*" hidden>
   <section class="editor" id="editor" hidden>
+    <div class="step" id="stepKey" hidden>
+      <h2>Connect Gemini (one time)</h2>
+      <p class="status big">To cut characters out of plain card photos, this app uses Google Gemini. Get a free API key, then paste it here. It stays on this phone only.</p>
+      <a class="big link" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">1. Get a key at aistudio.google.com/apikey</a>
+      <input type="password" id="keyInput" placeholder="2. Paste your Gemini API key" autocomplete="off">
+      <p class="status" id="keyMsg"></p>
+      <button class="big primary" id="keySave">Save key and continue</button>
+      <button class="big" id="keyCancel">Cancel</button>
+    </div>
     <div class="step" id="stepWork">
       <div class="spinner" id="spinner"></div>
       <p class="status big" id="pickStatus"></p>
@@ -65,6 +74,7 @@
 
   <script src="cards.js"></script>
   <script src="process.js"></script>
+  <script src="ai.js"></script>
   <script src="app.js"></script>
   <script src="editor.js"></script>
 </body>

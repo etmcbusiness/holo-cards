@@ -1,10 +1,10 @@
-// "Add card": one image with the card (character removed) and the cut-out character side by
-// side. It's split apart, the character gets the puffed 3D style and is placed over the art
-// window a little larger so it breaks out of the frame. Adjust if needed, then save in this
-// browser (IndexedDB).
+// "Add card": a plain photo of a card (Gemini paints the character out and isolates it), or
+// one image with the card (character removed) and the cut-out side by side (no AI needed).
+// The character gets the puffed 3D style and is placed so it breaks out of the frame.
+// Adjust if needed, then save in this browser (IndexedDB).
 (() => {
   const $ = (id) => document.getElementById(id);
-  const P = window.HoloProcess, app = window.HoloApp;
+  const P = window.HoloProcess, AI = window.HoloAI, app = window.HoloApp;
 
   // ---------- storage ----------
   const STORE = 'cards';
@@ -54,7 +54,7 @@
   function showWork(msg, failed = false) {
     editor.hidden = false;
     document.body.classList.add('editing');
-    $('stepWork').hidden = false; $('stepPlace').hidden = true;
+    $('stepWork').hidden = false; $('stepPlace').hidden = true; $('stepKey').hidden = true;
     status.textContent = msg;
     $('spinner').hidden = failed;
     $('retryPick').hidden = !failed;
@@ -74,45 +74,95 @@
   }
   $('holoToggle').onclick = () => setHolo(!holoOn);
 
-  $('fileCard').onchange = async (e) => {
-    const f = e.target.files[0];
-    if (!f || busy) return;
-    busy = true; made = null;
+  // one-time Gemini key screen; resolves once a key is saved
+  let keyWaiter = null;
+  function askForKey(msg) {
+    editor.hidden = false;
+    document.body.classList.add('editing');
+    $('stepWork').hidden = true; $('stepPlace').hidden = true; $('stepKey').hidden = false;
+    $('keyMsg').textContent = msg || '';
+    $('keyInput').value = '';
+    return new Promise((ok) => { keyWaiter = ok; });
+  }
+  $('keySave').onclick = () => {
+    const k = $('keyInput').value.trim();
+    if (!k) return;
+    AI.setKey(k);
+    $('stepKey').hidden = true;
+    keyWaiter?.(); keyWaiter = null;
+  };
+  $('keyCancel').onclick = () => { $('stepKey').hidden = true; close(); };
+
+  let pending = null; // the photo being processed, kept so a new key can retry it
+  $('fileCard').onchange = (e) => { const f = e.target.files[0]; if (f) build(f); };
+
+  async function build(f) {
+    if (busy) return;
+    busy = true; made = null; pending = f;
     try {
       $('cardName').value = '';
-      await say('Splitting the card and the character…');
-      const split = P.splitLayered(await P.loadImage(f));
-      if (!split) throw new Error('This photo needs the card (character removed) on one side and the cut-out character on the other.');
-      await say('Lining it up…');
-      const card = split.card, aspect = split.char.height / split.char.width;
-      const hOf = (wPct) => (wPct / 100) * card.width * aspect / card.height * 100;
-      const w = P.findWindow(card);
-      const win = { l: w.l * 100, t: w.t * 100, r: w.r * 100, b: w.b * 100 };
-      // If the card still shows the character, sit on top of it 12% bigger (it covers the
-      // original and breaks out of the frame); otherwise centre it on the art window,
-      // 8% wider than the window.
-      const at = P.locate(card, split.char);
-      let pos;
-      if (at) {
-        const w0 = at.w * 100, cx = at.x * 100 + w0 / 2, cy = at.y * 100 + hOf(w0) / 2, w1 = w0 * 1.12;
-        pos = { w: w1, l: cx - w1 / 2, t: cy - hOf(w1) / 2 };
-      } else {
-        const w1 = (win.r - win.l) * 1.08;
-        pos = { w: w1, l: (win.l + win.r) / 2 - w1 / 2, t: (win.t + win.b) / 2 - hOf(w1) / 2 };
-      }
-      const glitter = P.glitterFor(card, w);
-      setHolo(glitter.holo);
-      await say('Adding the 3D shading…');
-      const char = P.stylize(split.char);
-      made = { card, char, pos, win, hues: glitter.hues };
+      await say('Looking at the photo…');
+      const img = await P.loadImage(f);
+      // Already split (card + cut-out side by side)? No AI needed.
+      const split = P.splitLayered(img);
+      made = split ? fromSplit(split) : await fromPhoto(img);
       showPlace();
     } catch (err) {
       console.error(err);
+      if (err instanceof AI.KeyError) {
+        AI.setKey('');
+        busy = false;
+        await askForKey(err.message);
+        return build(pending);
+      }
       showWork(err.message || 'Something went wrong.', true);
     } finally {
       busy = false;
     }
-  };
+  }
+
+  const hOfFor = (card, char) => (wPct) => (wPct / 100) * card.width * (char.height / char.width) / card.height * 100;
+  const pct = (w) => ({ l: w.l * 100, t: w.t * 100, r: w.r * 100, b: w.b * 100 });
+
+  function fromSplit(split) {
+    const card = split.card, hOf = hOfFor(card, split.char);
+    const w = P.findWindow(card), win = pct(w);
+    // If the card still shows the character, sit on top of it 12% bigger (it covers the
+    // original and breaks out of the frame); otherwise centre it on the art window,
+    // 8% wider than the window.
+    const at = P.locate(card, split.char);
+    let pos;
+    if (at) {
+      const w0 = at.w * 100, cx = at.x * 100 + w0 / 2, cy = at.y * 100 + hOf(w0) / 2, w1 = w0 * 1.12;
+      pos = { w: w1, l: cx - w1 / 2, t: cy - hOf(w1) / 2 };
+    } else {
+      const w1 = (win.r - win.l) * 1.08;
+      pos = { w: w1, l: (win.l + win.r) / 2 - w1 / 2, t: (win.t + win.b) / 2 - hOf(w1) / 2 };
+    }
+    const glitter = P.glitterFor(card, w);
+    setHolo(glitter.holo);
+    return { card, char: P.stylize(split.char), pos, win, hues: glitter.hues };
+  }
+
+  // A plain photo of a card: Gemini paints the character out and isolates it in place.
+  async function fromPhoto(img) {
+    if (!AI.getKey()) await askForKey();
+    await say('Finding the card…');
+    const card = P.cropCard(img);
+    await say('Gemini is separating the character from the card… (about 20 seconds)');
+    const { erased, characterOnWhite } = await AI.separate(card);
+    await say('Adding the 3D shading…');
+    const cut = P.cutout(characterOnWhite, { minPiece: 0.002 });
+    const hOf = hOfFor(card, cut);
+    // exactly where it was, 6% bigger around its middle so it breaks out of the frame
+    const w0 = (cut.width / card.width) * 100;
+    const cx = (cut.offset.x / card.width) * 100 + w0 / 2, cy = (cut.offset.y / card.height) * 100 + hOf(w0) / 2;
+    const w1 = w0 * 1.06, pos = { w: w1, l: cx - w1 / 2, t: cy - hOf(w1) / 2 };
+    const w = P.findWindow(card);
+    const glitter = P.glitterFor(card, w);
+    setHolo(glitter.holo);
+    return { card: erased, char: P.stylize(cut), pos, win: pct(w), hues: glitter.hues };
+  }
 
   // ---------- step 2: check and adjust ----------
   const place = $('place'), placeChar = $('placeChar'), winBox = $('win'), size = $('charSize');

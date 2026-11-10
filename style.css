@@ -158,3 +158,12 @@ body {
 @keyframes spin { to { transform: rotate(360deg); } }
 .size input[type=range] { height: 32px; }
 .place { width: min(100%, calc((100svh - 400px) * 0.72)); }
+.editor a.big.link {
+  display: block; text-align: center; font-size: 17px; font-weight: 600; color: #ffe08a;
+  background: #3b3220; border: 1px solid #c9a227; border-radius: 14px; padding: 15px; text-decoration: none;
+}
+.editor #keyInput {
+  width: 100%; font: inherit; font-size: 17px; color: #eee; background: #1b1c22;
+  border: 1px solid #444; border-radius: 12px; padding: 14px;
+}
+#stepKey { padding-top: 12px; }

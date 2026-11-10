@@ -49,6 +49,7 @@ window.HoloProcess = (() => {
     if (e < 0) throw new Error('The character image looks empty after removing its background.');
     const out = canvasOf(e - a + 1, f - b + 1);
     out.getContext('2d').drawImage(c, a, b, out.width, out.height, 0, 0, out.width, out.height);
+    out.offset = { x: a, y: b }; // where the trimmed part was, in the (fitted) source
     return out;
   }
 

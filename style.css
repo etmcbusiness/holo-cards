@@ -58,7 +58,7 @@ body {
 .stripes {
   position: absolute; inset: 0; pointer-events: none;
   background: repeating-linear-gradient(90deg,
-    rgba(255,0,40,.10) 0 1px, rgba(0,255,80,.08) 1px 2px, rgba(0,60,255,.10) 2px 3px, rgba(0,0,0,.24) 3px 4px);
+    rgba(255,0,40,.05) 0 1px, rgba(0,255,80,.04) 1px 2px, rgba(0,60,255,.05) 2px 3px, rgba(0,0,0,.12) 3px 4px);
   background-position: calc(var(--px) * 9px) 0;
 }
 

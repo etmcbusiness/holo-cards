@@ -164,14 +164,28 @@
         slab = !!(info?.slab || info?.grading?.company); // a grade label means it is in a slab
         const ratio = /yu-?gi-?oh/i.test(info?.game || '') ? 59 / 86 : 63 / 88;
         note('photo', [img.naturalWidth, img.naturalHeight]); note('slab', slab);
-        const card = slab ? (four(info.slab_corners) ? P.straighten(img, info.slab_corners, null) : P.cropCard(img))
-          : ok ? P.straighten(img, info.corners, ratio) : P.cropCard(img);
+        // no slab corners from Gemini: grow the card's corners out to where a slab's edges sit
+        // (measured on a PSA slab: label above, a thin rim on the other sides)
+        const slabQuad = () => {
+          if (four(info.slab_corners)) return info.slab_corners;
+          if (!ok) return null;
+          const [tl, tr, br, bl] = info.corners, at = (p, a, b) => [p[0] + a[0] + b[0], p[1] + a[1] + b[1]];
+          const v = (p, q, k) => [(q[0] - p[0]) * k, (q[1] - p[1]) * k];
+          return [
+            at(tl, v(tr, tl, 0.135), v(bl, tl, 0.48)), at(tr, v(tl, tr, 0.135), v(br, tr, 0.48)),
+            at(br, v(bl, br, 0.135), v(tr, br, 0.12)), at(bl, v(br, bl, 0.135), v(tl, bl, 0.12)),
+          ].map(([x, y]) => [Math.min(1000, Math.max(0, x)), Math.min(1000, Math.max(0, y))]);
+        };
+        const sq = slab ? slabQuad() : null;
+        note('slab_corners', sq);
+        const card = sq ? P.straighten(img, sq, null) : ok ? P.straighten(img, info.corners, ratio) : P.cropCard(img);
         // Gemini outlines the character; it's cut from the card's own pixels (nothing redrawn)
         await say('Finding the character…');
         const [layout, mask] = await Promise.all([
           inspect(card),
-          AI.segment(card).catch((e) => { console.warn('Could not outline the character:', e); return null; }),
+          AI.segment(card).catch((e) => { console.warn('Could not outline the character:', e); note('segment_error', e.message); return null; }),
         ]);
+        note('mask', mask ? { body: true, fx: !!mask.fx } : null);
         if (mask) {
           await say('Adding the 3D shading…');
           made = fromMask(card, mask, layout);

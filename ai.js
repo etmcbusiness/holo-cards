@@ -59,7 +59,8 @@ window.HoloAI = (() => {
       const req = typeof body === 'function' ? body(model) : body;
       log.push({
         model, ask: (req.contents?.[0]?.parts?.[0]?.text || '').slice(0, 40), finish: c?.finishReason,
-        text: (c?.content?.parts || []).map((p) => p.text || (p.inlineData || p.inline_data ? '[image]' : '')).join('').slice(0, 60000),
+        text: (c?.content?.parts || []).map((p) => p.text || (p.inlineData || p.inline_data ? '[image]' : '')).join('')
+          .replace(/[A-Za-z0-9+/=]{300,}/g, (m) => `<${m.length} chars of image data>`).slice(0, 6000),
       });
       return { parts: c?.content?.parts || [], grounding: c?.groundingMetadata };
     }
@@ -125,7 +126,7 @@ window.HoloAI = (() => {
             grading: { type: 'OBJECT', properties: { company: { type: 'STRING' }, grade: { type: 'STRING' }, cert: { type: 'STRING' } } },
             condition: { type: 'OBJECT', properties: { grade: { type: 'NUMBER' }, note: { type: 'STRING' } } },
           },
-          required: ['name', 'set', 'year', 'number', 'edition', 'foil'],
+          required: ['slab', 'name', 'set', 'year', 'number', 'edition', 'foil', 'corners', 'slab_corners', 'grading', 'condition'],
         },
       },
     });

@@ -24,10 +24,52 @@
     <button id="prev" aria-label="Previous card">◀</button>
     <span id="dots" class="dots"></span>
     <button id="next" aria-label="Next card">▶</button>
+    <button id="add">+ Add card</button>
+    <button id="remove" hidden>Remove</button>
   </nav>
   <button id="motion" class="motion" hidden>Tilt with phone</button>
 
+  <!-- add-a-card flow (editor.js) -->
+  <section class="editor" id="editor" hidden>
+    <div class="step" id="stepPick">
+      <h2>Add a card</h2>
+      <label class="pick">
+        <span>1. The card, with the character removed</span>
+        <input type="file" id="fileArt" accept="image/*">
+      </label>
+      <label class="pick">
+        <span>2. The character on its own</span>
+        <input type="file" id="fileChar" accept="image/*">
+      </label>
+      <label class="pick">
+        <span>Name (optional)</span>
+        <input type="text" id="cardName" placeholder="e.g. Crystal Charizard">
+      </label>
+      <p class="status" id="pickStatus"></p>
+      <div class="row">
+        <button id="cancelPick">Cancel</button>
+        <button id="nextPick" class="primary" disabled>Next</button>
+      </div>
+    </div>
+
+    <div class="step" id="stepPlace" hidden>
+      <p class="hint">Drag the character into place. Drag the dashed line to where it should fade into the card.</p>
+      <div class="place" id="place">
+        <img id="placeArt" alt="">
+        <img id="placeChar" alt="">
+        <div class="fadeLine" id="fadeLine"><span>fade line</span></div>
+      </div>
+      <label class="size">Size <input type="range" id="charSize" min="20" max="160" value="94"></label>
+      <div class="row">
+        <button id="backPlace">Back</button>
+        <button id="savePlace" class="primary">Save card</button>
+      </div>
+    </div>
+  </section>
+
   <script src="cards.js"></script>
+  <script src="process.js"></script>
   <script src="app.js"></script>
+  <script src="editor.js"></script>
 </body>
 </html>

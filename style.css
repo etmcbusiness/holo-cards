@@ -90,3 +90,48 @@ body {
 .dots i.on { background: #eee; }
 .motion { position: fixed; top: calc(12px + env(safe-area-inset-top)); right: 12px; }
 
+.controls #add { background: #3a4fd8; border-color: #5b6ff0; }
+[hidden] { display: none !important; }
+
+/* ---------- add-a-card editor ---------- */
+.editor {
+  position: fixed; inset: 0; z-index: 10; overflow: auto;
+  background: #0c0c10f2; padding: max(16px, env(safe-area-inset-top)) 16px 24px;
+  display: grid; place-items: start center;
+}
+.step { width: min(100%, 420px); display: grid; gap: 14px; }
+.step h2 { margin: 8px 0 4px; font-size: 20px; }
+.pick { display: grid; gap: 6px; font-size: 15px; }
+.pick input[type=text] {
+  font: inherit; color: #eee; background: #1b1c22; border: 1px solid #444; border-radius: 8px; padding: 9px 10px;
+}
+.pick input[type=file] { color: #bbb; font-size: 14px; }
+.status, .hint { margin: 0; color: #aab; font-size: 14px; }
+.row { display: flex; gap: 10px; justify-content: flex-end; }
+.editor button {
+  font: inherit; font-size: 15px; color: #eee; background: #2a2b33; border: 1px solid #444;
+  border-radius: 8px; padding: 10px 16px; cursor: pointer;
+}
+.editor button.primary { background: #3a4fd8; border-color: #5b6ff0; }
+.editor button:disabled { opacity: .45; cursor: default; }
+
+.place {
+  position: relative; justify-self: center;
+  width: min(100%, calc((100svh - 230px) * 0.72));
+  touch-action: none; user-select: none;
+}
+.place #placeArt { display: block; width: 100%; border-radius: 4.6% / 3.4%; }
+.place #placeChar { position: absolute; cursor: move; -webkit-user-drag: none; }
+.fadeLine {
+  position: absolute; left: -8px; right: -8px; height: 28px; margin-top: -14px;
+  cursor: ns-resize; touch-action: none;
+}
+.fadeLine::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 13px; border-top: 2px dashed #ff4f8b;
+}
+.fadeLine span {
+  position: absolute; right: 0; top: 0; font-size: 11px; color: #fff; background: #ff4f8b;
+  border-radius: 6px; padding: 2px 6px;
+}
+.size { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+.size input { flex: 1; }

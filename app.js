@@ -2,7 +2,7 @@
   const $ = (id) => document.getElementById(id);
   const stage = $('stage'), card = $('card'), art = $('art'), pop = $('pop');
   const canvas = $('sparkles'), ctx = canvas.getContext('2d');
-  const cards = window.CARDS;
+  const cards = [...window.CARDS]; // built-in cards; ones added on this device are appended by editor.js
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let index = 0;
 
@@ -16,9 +16,26 @@
       art.alt = c.name;
       art.src = c.art;
       document.title = c.name;
-      [...$('dots').children].forEach((d, n) => d.classList.toggle('on', n === index));
+      renderControls();
     }, 200);
   }
+
+  function renderControls() {
+    $('dots').innerHTML = cards.map((_, n) => `<i class="${n === index ? 'on' : ''}"></i>`).join('');
+    $('prev').hidden = $('next').hidden = cards.length < 2;
+    $('remove').hidden = !cards[index]?.id; // only cards added on this device can be removed
+  }
+
+  // used by editor.js
+  window.HoloApp = {
+    add(c, select) { cards.push(c); if (select) show(cards.length - 1); else renderControls(); },
+    current: () => cards[index],
+    removeCurrent() {
+      const [c] = cards.splice(index, 1);
+      show(Math.min(index, cards.length - 1));
+      return c;
+    },
+  };
 
   function placePop() {
     const c = cards[index];
@@ -60,11 +77,10 @@
   });
   addEventListener('resize', () => { sizeSparkles(); placePop(); });
 
-  $('dots').innerHTML = cards.map(() => '<i></i>').join('');
-  document.querySelector('.controls').style.visibility = cards.length > 1 ? '' : 'hidden';
   $('prev').onclick = () => show(index - 1);
   $('next').onclick = () => show(index + 1);
   addEventListener('keydown', (e) => {
+    if (document.body.classList.contains('editing')) return;
     if (e.key === 'ArrowLeft') show(index - 1);
     if (e.key === 'ArrowRight') show(index + 1);
   });

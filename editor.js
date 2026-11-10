@@ -155,10 +155,13 @@
         info = await identify(P.fit(img, 1600));
         // straighten and crop it exactly using the corners Gemini found, else trim plain borders
         const ok = Array.isArray(info?.corners) && info.corners.length === 4 && info.corners.every((p) => p?.length === 2);
-        // a graded card keeps its whole case and label: measure the slab's shape from the photo
-        slab = !!((info?.slab || info?.grading?.company) && ok); // a grade label means it is in a slab
-        const ratio = slab ? null : /yu-?gi-?oh/i.test(info?.game || '') ? 59 / 86 : 63 / 88;
-        const card = ok ? P.straighten(img, info.corners, ratio) : P.cropCard(img);
+        // A graded card keeps its whole case and label (its shape measured from the photo; slabs
+        // differ by company). Without the slab's corners, trim the plain background around it.
+        const four = (q) => Array.isArray(q) && q.length === 4 && q.every((p) => p?.length === 2);
+        slab = !!(info?.slab || info?.grading?.company); // a grade label means it is in a slab
+        const ratio = /yu-?gi-?oh/i.test(info?.game || '') ? 59 / 86 : 63 / 88;
+        const card = slab ? (four(info.slab_corners) ? P.straighten(img, info.slab_corners, null) : P.cropCard(img))
+          : ok ? P.straighten(img, info.corners, ratio) : P.cropCard(img);
         // Gemini outlines the character; it's cut from the card's own pixels (nothing redrawn)
         await say('Finding the character…');
         const [layout, mask] = await Promise.all([

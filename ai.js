@@ -94,8 +94,9 @@ window.HoloAI = (() => {
     'the card number (like 4/102), the edition or print (for example "1st Edition", "Shadowless", "Unlimited", "Japanese", or "" if none), ' +
     'and its foil: "holo" if the artwork is holographic, "reverse" if the card is foil everywhere except the artwork, or "none". ' +
     'Use "" for anything you cannot tell. slab: true if the card is sealed in a graded slab (PSA, BGS, CGC, SGC... case with a grade label). ' +
-    'Also give corners: the four outer corners in this image as [x, y] on a 0-1000 scale: of the whole slab including its label if it is in a graded slab, ' +
-    'otherwise of the card itself (inside any sleeve or top-loader); ' +
+    'Also give corners: the four corners of the card itself (inside any sleeve, top-loader or slab) in this image as [x, y] on a 0-1000 scale ' +
+    '(x across, y down), in the order top-left, top-right, bottom-right, bottom-left. ' +
+    'slab_corners: if it is in a graded slab, the four OUTER corners of the whole plastic slab including its grade label at the top, same scale and order; otherwise []. ' +
     '(x across, y down), in the order top-left, top-right, bottom-right, bottom-left of the card. ' +
     'grading: if the card is in a graded slab, the grading company (PSA, BGS, CGC, SGC, TAG...), the grade on its label (like "9" or "9.5") and the cert number; otherwise all "". ' +
     'condition: your honest estimate of the grade PSA would give this card (1-10), judging centering, corners, edges and surface as well as the photo allows, ' +
@@ -113,6 +114,7 @@ window.HoloAI = (() => {
             number: { type: 'STRING' }, edition: { type: 'STRING' },
             foil: { type: 'STRING', enum: ['holo', 'reverse', 'none'] },
             corners: { type: 'ARRAY', items: { type: 'ARRAY', items: { type: 'NUMBER' } } },
+            slab_corners: { type: 'ARRAY', items: { type: 'ARRAY', items: { type: 'NUMBER' } } },
             grading: { type: 'OBJECT', properties: { company: { type: 'STRING' }, grade: { type: 'STRING' }, cert: { type: 'STRING' } } },
             condition: { type: 'OBJECT', properties: { grade: { type: 'NUMBER' }, note: { type: 'STRING' } } },
           },
@@ -205,10 +207,16 @@ window.HoloAI = (() => {
         const tx = t.getContext('2d', { willReadFrequently: true });
         tx.drawImage(im, 0, 0, t.width, t.height);
         const id = tx.getImageData(0, 0, t.width, t.height), d = id.data;
-        for (let k = 0; k < d.length; k += 4) {
-          const p = Math.max(d[k], d[k + 1], d[k + 2]) * (d[k + 3] / 255);
-          d[k] = d[k + 1] = d[k + 2] = 255;
-          d[k + 3] = Math.max(0, Math.min(255, (p - 110) * 4)); // crisp edge from the probability
+        // The map is how sure Gemini is (0-255), and how sure varies a lot between cards: a
+        // fixed cut-off left some characters half see-through. Cut at half of its most sure,
+        // with a short ramp for a clean, solid edge.
+        const P = new Float32Array(d.length / 4);
+        let pmax = 0;
+        for (let k = 0; k < P.length; k++) { P[k] = Math.max(d[k * 4], d[k * 4 + 1], d[k * 4 + 2]) * (d[k * 4 + 3] / 255); pmax = Math.max(pmax, P[k]); }
+        if (pmax < 20) continue; // nothing there
+        for (let k = 0; k < P.length; k++) {
+          d[k * 4] = d[k * 4 + 1] = d[k * 4 + 2] = 255;
+          d[k * 4 + 3] = Math.max(0, Math.min(255, ((P[k] - pmax * 0.42) / (pmax * 0.16)) * 255));
         }
         tx.putImageData(id, 0, 0);
         o.drawImage(t, x0, y0);

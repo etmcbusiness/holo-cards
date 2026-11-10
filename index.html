@@ -35,11 +35,13 @@
   <button id="styleBtn" class="style-btn">✨ Holo</button>
 
   <nav class="controls">
-    <button id="prev" aria-label="Previous card">◀</button>
-    <span id="dots" class="dots"></span>
-    <button id="next" aria-label="Next card">▶</button>
-    <button id="add">+ Add card</button>
-    <button id="remove" hidden>Remove</button>
+    <div class="pager">
+      <button id="prev" aria-label="Previous card"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <span id="dots" class="count"></span>
+      <button id="next" aria-label="Next card"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+    </div>
+    <button id="add"><span>+</span> Add card</button>
+    <button id="remove" aria-label="Remove this card" hidden><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button>
   </nav>
 
   <!-- add-a-card flow (editor.js): "+ Add card" opens the photo picker straight away -->

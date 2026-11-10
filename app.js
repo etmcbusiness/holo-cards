@@ -29,7 +29,7 @@
   }
 
   function renderControls() {
-    $('dots').innerHTML = cards.map((_, n) => `<i class="${n === index ? 'on' : ''}"></i>`).join('');
+    $('dots').textContent = `${index + 1} / ${cards.length}`;
     $('prev').hidden = $('next').hidden = cards.length < 2;
     $('remove').hidden = !cards[index]?.id; // only cards added on this device can be removed
   }

@@ -1,5 +1,6 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
+html { background: #0c0c10; } /* also behind Safari's toolbar and the home bar */
 body {
   height: 100dvh; /* the visible area, above Safari's toolbar */
   display: flex; flex-direction: column;
@@ -79,19 +80,6 @@ body {
   backface-visibility: hidden;
 }
 
-.controls {
-  flex: none; height: calc(70px + env(safe-area-inset-bottom)); display: flex; align-items: center; justify-content: center; gap: 10px;
-  padding-bottom: env(safe-area-inset-bottom);
-}
-.controls button {
-  font: inherit; font-size: 15px; color: #eee; background: #2a2b33; border: 1px solid #444;
-  border-radius: 8px; padding: 8px 14px; cursor: pointer;
-}
-.dots { display: flex; gap: 8px; }
-.dots i { width: 8px; height: 8px; border-radius: 50%; background: #555; }
-.dots i.on { background: #eee; }
-
-.controls #add { background: #3a4fd8; border-color: #5b6ff0; }
 [hidden] { display: none !important; }
 
 /* ---------- add-a-card editor ---------- */
@@ -137,7 +125,6 @@ body {
 .place #placeArt { touch-action: none; }
 
 /* ---------- big, thumb-friendly add flow ---------- */
-.controls #add { font-size: 17px; padding: 12px 22px; border-radius: 12px; font-weight: 600; }
 .editor .step { gap: 12px; }
 .editor button.big {
   width: 100%; font-size: 19px; font-weight: 600; padding: 16px; border-radius: 14px;
@@ -165,9 +152,10 @@ body {
 
 /* holo kind button (top right); no foil on non-holo cards */
 .style-btn {
-  position: fixed; top: calc(12px + env(safe-area-inset-top)); right: 12px; z-index: 5;
-  font: inherit; font-size: 16px; font-weight: 600; color: #ffe08a; background: #3b3220;
-  border: 1px solid #c9a227; border-radius: 12px; padding: 10px 16px; cursor: pointer;
+  position: fixed; top: calc(12px + env(safe-area-inset-top)); right: 14px; z-index: 5;
+  font: inherit; font-size: 15px; font-weight: 600; color: #ffe08a; background: rgba(59, 50, 32, .75);
+  border: 1px solid rgba(201, 162, 39, .6); border-radius: 999px; padding: 8px 15px; cursor: pointer;
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
 body.editing .style-btn { display: none; }
 .card[data-holo="none"] .holo { display: none; }
@@ -180,9 +168,9 @@ body.editing .style-btn { display: none; }
 }
 .editor .info #cardName, .editor .info #cardGame, .editor .info #cardSet, .editor .info #cardEdition { grid-column: 1 / -1; }
 .editor .info #cardName { font-size: 18px; font-weight: 600; }
-.caption { flex: none; text-align: center; padding: 0 16px 4px; min-height: 44px; }
-.caption b { display: block; font-size: 19px; }
-.caption span { display: block; font-size: 14px; color: #aab; margin-top: 2px; }
+.caption { flex: none; text-align: center; padding: 6px 16px 0; min-height: 46px; }
+.caption b { display: block; font-size: 19px; letter-spacing: .01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.caption span { display: block; font-size: 13px; color: #9a9cab; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* foil and shine only where the card has foil (app.js sets --foil from the art window) */
 .holo, .glare { clip-path: var(--foil, none); }
@@ -195,9 +183,10 @@ body.editing .style-btn { display: none; }
 
 /* card value under the caption */
 .value-btn {
-  flex: none; align-self: center; margin-top: 2px;
-  font: inherit; font-size: 16px; font-weight: 600; color: #b9f5c8; background: #17301f;
-  border: 1px solid #2f8a4c; border-radius: 12px; padding: 7px 16px; cursor: pointer;
+  flex: none; align-self: center; margin: 8px 0 4px;
+  font: inherit; font-size: 15px; font-weight: 600; color: #b9f5c8; background: rgba(23, 48, 31, .8);
+  border: 1px solid rgba(47, 138, 76, .7); border-radius: 999px; padding: 7px 16px; cursor: pointer;
+  font-variant-numeric: tabular-nums;
 }
 .value-btn.empty { color: #aab; background: #22232a; border-color: #444; }
 body.editing .value-btn { display: none; }
@@ -212,3 +201,32 @@ body.editing .value-btn { display: none; }
 .sales ul { margin: 0; padding-left: 18px; color: #bbc; }
 .sales a { color: #8fb4ff; word-break: break-word; }
 .sales .err { color: #ff9a9a; }
+
+/* ---------- bottom bar: one row that always fits, above the home bar ---------- */
+.controls {
+  flex: none; display: flex; align-items: center; justify-content: center; gap: 10px;
+  margin: 6px auto 0; width: min(100%, 460px);
+  padding: 8px 14px calc(10px + env(safe-area-inset-bottom));
+}
+.controls button {
+  font: inherit; color: #eee; cursor: pointer; white-space: nowrap;
+  height: 48px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, .12); background: rgba(255, 255, 255, .07);
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  transition: transform .12s, background .2s;
+}
+.controls button:active { transform: scale(.95); }
+.controls svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.pager {
+  display: flex; align-items: center; height: 48px; border-radius: 14px;
+  background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .12);
+}
+.pager button { width: 46px; height: 46px; border: 0; background: none; border-radius: 13px; }
+.count { min-width: 52px; text-align: center; font-size: 15px; font-weight: 600; color: #cfd0da; font-variant-numeric: tabular-nums; }
+.controls #add {
+  flex: 1; max-width: 190px; padding: 0 18px; font-size: 16px; font-weight: 700;
+  background: linear-gradient(180deg, #4a5ff0, #3446d4); border-color: #6377f5;
+  box-shadow: 0 6px 18px -8px rgba(74, 95, 240, .8);
+}
+.controls #add span { font-size: 20px; line-height: 1; }
+.controls #remove { width: 48px; color: #ff9a9a; }
+.pager:has(#prev[hidden]) { display: none; } /* just one card: no pager */

@@ -16,6 +16,13 @@
 </head>
 <body>
   <main class="stage" id="stage">
+    <div class="empty-state" id="empty" hidden>
+      <div class="empty-icon">✨</div>
+      <h2>No cards yet</h2>
+      <p class="hint">Take a photo of a card and it comes to life here.</p>
+      <button class="big primary" id="emptyAdd">+ Add your first card</button>
+      <button class="text-btn" id="restore" hidden>Bring back the starter cards</button>
+    </div>
     <div class="card" id="card">
       <div class="face">
         <img class="art" id="art" alt="">

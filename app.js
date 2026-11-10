@@ -3,7 +3,12 @@
   const stage = $('stage'), card = $('card'), art = $('art'), pop = $('pop');
   const canvas = $('sparkles'), ctx = canvas.getContext('2d');
   const amb = $('ambience'), actx = amb.getContext('2d'), bg = $('bg');
-  const cards = [...window.CARDS]; // built-in cards; ones added on this device are appended by editor.js
+  // built-in cards (minus any removed on this device); ones added here are appended by editor.js
+  const keyOf = (c) => c.id || `${c.name}|${c.info?.number || ''}`; // one card's key in this browser's storage
+  const HIDDEN = 'holo-hidden';
+  const hidden = () => { try { return JSON.parse(localStorage.getItem(HIDDEN)) || []; } catch { return []; } };
+  const setHidden = (list) => { try { list.length ? localStorage.setItem(HIDDEN, JSON.stringify(list)) : localStorage.removeItem(HIDDEN); } catch {} };
+  const cards = window.CARDS.filter((c) => !hidden().includes(keyOf(c)));
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let index = 0;
 
@@ -22,7 +27,30 @@
     return ready.get(src);
   };
   let showing = 0;
+  // no cards left: a friendly empty screen instead of the card
+  function showEmpty() {
+    showing++;
+    document.body.classList.add('empty');
+    $('empty').hidden = false;
+    $('restore').hidden = !hidden().length;
+    specks = []; glints = []; motes = [];
+    pop.classList.remove('on');
+    document.title = 'Holo Cards';
+    window.HoloValue?.render(null);
+    renderControls();
+  }
+  $('emptyAdd').onclick = () => $('add').click();
+  $('restore').onclick = () => {
+    setHidden([]);
+    const have = new Set(cards.map(keyOf));
+    cards.unshift(...window.CARDS.filter((c) => !have.has(keyOf(c))));
+    show(0);
+  };
+
   async function show(i) {
+    if (!cards.length) return showEmpty();
+    document.body.classList.remove('empty');
+    $('empty').hidden = true;
     index = (i + cards.length) % cards.length;
     const c = cards[index], me = ++showing;
     card.classList.add('swap');
@@ -49,18 +77,22 @@
   function renderControls() {
     $('dots').textContent = `${index + 1} / ${cards.length}`;
     $('prev').hidden = $('next').hidden = cards.length < 2;
-    $('remove').hidden = !cards[index]?.id; // only cards added on this device can be removed
+    $('remove').hidden = !cards.length;
   }
 
   // used by editor.js
   window.HoloApp = {
-    add(c, select) { cards.push(c); if (select) show(cards.length - 1); else renderControls(); },
+    add(c, select) {
+      cards.push(c);
+      if (select || cards.length === 1) show(cards.length - 1); else renderControls();
+    },
     current: () => cards[index],
     all: () => cards,
-    keyOf: (c) => c.id || `${c.name}|${c.info?.number || ''}`, // one card's key in this browser's storage
+    keyOf,
     rerender: () => window.HoloValue?.render(cards[index]),
     removeCurrent() {
       const [c] = cards.splice(index, 1);
+      if (!c.id) setHidden([...hidden(), keyOf(c)]); // a built-in card: hidden on this device
       show(Math.min(index, cards.length - 1));
       return c;
     },
@@ -68,6 +100,7 @@
 
   function placePop() {
     const c = cards[index];
+    if (!c) return;
     pop.classList.toggle('on', !!c.pop);
     if (!c.pop) return;
     // art position inside the card (offsets ignore the 3D tilt)
@@ -184,6 +217,7 @@
     buildParticles();
   }
   $('styleBtn').onclick = () => {
+    if (!cards[index]) return;
     const c = cards[index], next = STYLES[(STYLES.indexOf(styleOf(c)) + 1) % STYLES.length];
     try { localStorage.setItem(styleKey(c), next); } catch {}
     applyStyle();
@@ -201,6 +235,7 @@
   function buildParticles() {
     const c = cards[index];
     specks = []; glints = [];
+    if (!c) return;
     if (styleOf(c) === 'none') return;
     const area = canvas.clientWidth * canvas.clientHeight;
     const hues = Array.isArray(c.glitter) && c.glitter.length ? c.glitter : GLITTER_COLORS;
@@ -307,6 +342,7 @@
   }
   function buildAmbience() {
     const c = cards[index];
+    if (!c) { motes = []; return; }
     ambType = ambienceOf(c);
     const cfg = AMBIENCE[ambType], [, , w, h] = windowOf(c);
     const area = (amb.clientWidth * w / 100) * (amb.clientHeight * h / 100);

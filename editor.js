@@ -39,7 +39,7 @@
   const closeSheet = () => { sheet.hidden = true; document.body.classList.remove('editing'); };
   $('remove').onclick = () => {
     const c = app.current();
-    if (!c?.id) return;
+    if (!c) return;
     $('rmTitle').textContent = `Remove ${c.name}?`;
     $('rmThumb').src = c.art;
     sheet.hidden = false;
@@ -50,11 +50,11 @@
   $('rmYes').onclick = async () => {
     const c = app.current();
     closeSheet();
-    if (!c?.id) return;
-    await req('readwrite', (s) => s.delete(c.id));
+    if (!c) return;
+    if (c.id) await req('readwrite', (s) => s.delete(c.id)); // a built-in card is just hidden (app.js)
     try { localStorage.removeItem(`holo-value:${app.keyOf(c)}`); localStorage.removeItem(`holo-kind:${app.keyOf(c)}`); } catch {}
     app.removeCurrent();
-    URL.revokeObjectURL(c.art); URL.revokeObjectURL(c.pop.src);
+    if (c.id) { URL.revokeObjectURL(c.art); URL.revokeObjectURL(c.pop.src); }
   };
 
   // ---------- step 1: "+ Add card" opens the photo picker; then it all happens ----------

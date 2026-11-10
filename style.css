@@ -320,3 +320,14 @@ body.editing .value-btn { display: none; }
 @keyframes rise { from { transform: translateY(40px); opacity: 0; } }
 body.editing .controls, body.editing .caption { visibility: hidden; }
 .editor .field.money { display: grid; font-size: inherit; }
+
+/* no cards left */
+body.empty .card, body.empty .caption, body.empty .style-btn, body.empty .controls { display: none !important; }
+.empty-state { display: grid; gap: 12px; justify-items: center; text-align: center; width: min(86vw, 340px); }
+.empty-icon { font-size: 54px; filter: drop-shadow(0 6px 18px rgba(255, 224, 138, .35)); }
+.empty-state h2 { margin: 0; font-size: 24px; }
+.empty-state .big {
+  width: 100%; font: inherit; font-size: 18px; font-weight: 700; color: #fff; padding: 16px; border-radius: 14px; cursor: pointer;
+  background: linear-gradient(180deg, #4a5ff0, #3446d4); border: 1px solid #6377f5;
+}
+.empty-state .text-btn { font: inherit; cursor: pointer; }

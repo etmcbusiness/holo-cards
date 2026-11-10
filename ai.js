@@ -6,8 +6,8 @@
 //                     read from the photo (one cheap text call)
 //   inspect(flatCard) -> { win, char, ambience }: where the art window and the character are
 //                     (one cheap text call on the straightened card)
-//   segment(flatCard) -> a mask of exactly which pixels are the character (no image is redrawn,
-//                     so the cut-out is the card's own pixels)
+//   segment(flatCard) -> { body, fx }: masks of exactly which pixels are the character, and its
+//                     own fire/breath/effects (no image is redrawn, so the cut-out is the card's own pixels)
 //   value(details)  -> recent sold prices for that card at that grade (text call with Google Search)
 window.HoloAI = (() => {
   const KEY = 'holo-gemini-key';
@@ -162,10 +162,16 @@ window.HoloAI = (() => {
     return { win, char: pct(r.character), ambience: AMBIENCE.includes(r.ambience) ? r.ambience : null };
   }
 
-  // Exactly which pixels are the character: Gemini's segmentation mask, drawn into a canvas the
-  // size of the card whose alpha is the mask. null if it found nothing.
-  const SEGMENT = 'Give the segmentation mask for the main character in this trading card\'s picture: the creature or person, ' +
-    'including its wings, tail, hair and any fire, breath or effects coming from it. Not the card frame, text, symbols or the picture background. ' +
+  // Exactly which pixels are the character: Gemini's segmentation masks, drawn into canvases the
+  // size of the card whose alpha is the mask. The body and the character's own effects (fire it
+  // breathes, the flame on its tail) come back separately, so effects can be switched off; fire
+  // or explosions in the background must not be included at all. null if no body was found.
+  const SEGMENT = 'Give segmentation masks for the main character in this trading card\'s picture. ' +
+    'Use the label "body" for the character itself: the creature or person with its wings, tail, claws, hair and clothes (one entry). ' +
+    'Use the label "effect" for each fire, breath, beam or energy that comes OUT of the character itself, like flame breathed from its mouth ' +
+    'or the flame on the tip of its tail. ' +
+    'Do NOT include the picture background, even where it touches the character: background fire, explosions, lava, smoke, clouds, sky, ' +
+    'lightning, water or scenery are not the character. Not the card frame, text or symbols either. ' +
     'Output a JSON list of segmentation masks where each entry contains the 2D bounding box in the key "box_2d", ' +
     'the segmentation mask in key "mask", and the text label in the key "label".';
   async function segment(card) {
@@ -178,10 +184,12 @@ window.HoloAI = (() => {
     try { list = JSON.parse(text.replace(/^```(json)?|```$/g, '')); } catch { const m = text.match(/\[[\s\S]*\]/); try { list = m && JSON.parse(m[0]); } catch {} }
     if (!Array.isArray(list)) list = list ? [list] : [];
     const W = card.width, H = card.height;
-    const out = Object.assign(document.createElement('canvas'), { width: W, height: H });
-    const o = out.getContext('2d', { willReadFrequently: true });
-    let drew = false;
+    const layer = () => Object.assign(document.createElement('canvas'), { width: W, height: H });
+    const body = layer(), fx = layer();
+    let drewBody = false, drewFx = false;
     for (const e of list) {
+      const isFx = /effect|fire|flame|breath|beam|energy/i.test(e?.label || '');
+      const o = (isFx ? fx : body).getContext('2d', { willReadFrequently: true });
       const b = e?.box_2d;
       if (!Array.isArray(b) || b.length !== 4) continue;
       const x0 = (b[1] / 1000) * W, y0 = (b[0] / 1000) * H, bw = ((b[3] - b[1]) / 1000) * W, bh = ((b[2] - b[0]) / 1000) * H;
@@ -202,17 +210,17 @@ window.HoloAI = (() => {
         }
         tx.putImageData(id, 0, 0);
         o.drawImage(t, x0, y0);
-        drew = true;
+        if (isFx) drewFx = true; else drewBody = true;
       } else if (Array.isArray(e.mask) && e.mask.length > 2) {
         // a polygon of [x, y] on 0-1000 over the whole image
         o.fillStyle = '#fff';
         o.beginPath();
         e.mask.forEach(([x, y], i) => (i ? o.lineTo : o.moveTo).call(o, (x / 1000) * W, (y / 1000) * H));
         o.fill();
-        drew = true;
+        if (isFx) drewFx = true; else drewBody = true;
       }
     }
-    return drew ? out : null;
+    return drewBody ? { body, fx: drewFx ? fx : null } : null;
   }
 
   // What has this card sold for lately, at this grade? Gemini searches the web (sold listings,

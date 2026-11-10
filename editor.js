@@ -185,6 +185,7 @@
   // Gemini's art window is used when there is one: on full-art cards the line-finding guess
   // picks some text box instead, and the character got faded off at its bottom edge.
   function fromSplit(split, ref = null, layout = null) {
+    showFx(null); // a ready-made or repainted cut-out has no separate effects
     const card = split.card, hOf = hOfFor(card, split.char);
     const w = layout?.win ? { l: layout.win.l / 100, t: layout.win.t / 100, r: layout.win.r / 100, b: layout.win.b / 100 } : P.findWindow(card);
     const win = pct(w);
@@ -228,7 +229,15 @@
 
   // The character cut from the card itself by Gemini's mask, sitting exactly where it was (a
   // touch bigger so it covers its own outline); the hole behind it filled in.
-  function fromMask(card, mask, layout) {
+  // masks: { body, fx } from AI.segment; withFx: include the character's own fire/breath.
+  function fromMask(card, masks, layout, withFx = true) {
+    let mask = masks.body;
+    if (withFx && masks.fx) {
+      mask = Object.assign(document.createElement('canvas'), { width: card.width, height: card.height });
+      const x = mask.getContext('2d', { willReadFrequently: true });
+      x.drawImage(masks.body, 0, 0); x.drawImage(masks.fx, 0, 0);
+    }
+    showFx(masks.fx ? withFx : null);
     const char = P.maskCut(card, mask), o = char.offset;
     const w = layout?.win ? { l: layout.win.l / 100, t: layout.win.t / 100, r: layout.win.r / 100, b: layout.win.b / 100 } : P.findWindow(card);
     const w0 = (char.width / card.width) * 100, h0 = (char.height / card.height) * 100, w1 = w0 * 1.03;
@@ -238,9 +247,26 @@
     return {
       card: P.inpaint(card, mask), char: P.stylize(char), win: pct(w), hues: glitter.hues,
       pos: { w: w1, l: cx - w1 / 2, t: cy - (h0 * 1.03) / 2 },
-      ambience: layout?.ambience || null, photoCard: card, layout,
+      ambience: layout?.ambience || null, photoCard: card, layout, masks, withFx,
     };
   }
+
+  // the "fire & effects" switch: only shown when Gemini found effects coming from the character
+  function showFx(on) {
+    const b = $('fxToggle');
+    b.hidden = on === null;
+    b.setAttribute('aria-pressed', !!on);
+    b.textContent = on ? '🔥 Its fire & effects: on (tap to change)' : '🔥 Its fire & effects: off (tap to change)';
+  }
+  $('fxToggle').onclick = () => {
+    if (!made?.masks) return;
+    const { win, pos } = made, kind = holoKind, oldW = pos.w;
+    made = fromMask(made.photoCard, made.masks, made.layout, !made.withFx);
+    made.win = win; // keep the art window as it was adjusted
+    setHolo(kind);
+    if (Math.abs(oldW - made.pos.w) < 0.01) made.pos = pos;
+    showPlace();
+  };
 
   // A plain photo of a card: one Gemini call returns the card with the character painted
   // out and the character cut out beside it; that's split like a hand-made layered image.

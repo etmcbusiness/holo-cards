@@ -33,7 +33,13 @@ window.HoloAI = (() => {
         const msg = json.error?.message || `Gemini error ${r.status}`;
         if (r.status === 400 && /api key/i.test(msg)) throw new KeyError('That Gemini API key was not accepted.');
         if (r.status === 403) throw new KeyError('That Gemini API key is not allowed to use image editing.');
-        if (r.status === 429) throw new Error('Gemini is busy or the free limit is used up. Try again in a minute.');
+        if (r.status === 429) {
+          // quota: another model may still have some, so try it before giving up
+          lastErr = /limit: 0|free_tier|billing/i.test(msg)
+            ? new Error('Your Gemini key has no allowance for image editing. Turn on billing for it at aistudio.google.com (Settings → Billing), then try again.')
+            : new Error(`Gemini says: ${msg.split('\n')[0]}`);
+          continue;
+        }
         throw new Error(msg);
       }
       const parts = json.candidates?.[0]?.content?.parts || [];

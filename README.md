@@ -6,15 +6,7 @@ Live page: https://etmcbusiness.github.io/holo-cards/
 
 ## Adding a card on the page
 
-Tap **+ Add card** and pick one photo or scan of the card. The page then:
-
-1. crops the card out of whatever is around it
-2. finds the art window (where the glitter goes)
-3. cuts the character out with Segment Anything (SlimSAM, about 14 MB, downloaded once)
-4. paints the character out of the card and gives the cut-out the puffed, banded 3D look
-5. places it a little bigger than before, feet fixed, so it breaks out of the frame
-
-If a part is missing (a wing, a tail), tap it; switch to "Tapping removes" to take out a wrong bit. You can also drag the character or the edges of the art window. Cards added this way are kept in that browser only.
+Tap **+ Add card** and pick one image with the card (character removed) on one side and the cut-out character on the other, on a checkerboard or plain background. The page splits them, gives the character the puffed, banded 3D look and centres it on the art window a little larger, so it breaks out of the frame. Drag or resize the character, or drag the edges of the art window, then save. Cards added this way are kept in that browser only.
 
 ## Adding a built-in card
 

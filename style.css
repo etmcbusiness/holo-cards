@@ -134,7 +134,4 @@ body {
 .place .win [data-edge=l], .place .win [data-edge=r] { top: 0; bottom: 0; width: 26px; cursor: ew-resize; }
 .place .win [data-edge=l] { left: -14px; }
 .place .win [data-edge=r] { right: -14px; }
-.row.tools { justify-content: flex-start; }
-.editor button#tapMode.removing { background: #8a2b45; border-color: #c2456a; }
-.place.working { opacity: .55; pointer-events: none; }
 .place #placeArt { touch-action: none; }

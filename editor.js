@@ -1,8 +1,7 @@
-// "Add card": one photo of a card in, a holo card out. The card is cropped from its
-// background, the art window found, the character cut out with Segment Anything and
-// painted out of the card, given the puffed 3D style, and placed so it breaks out of the
-// frame. Tapping the preview adds or removes parts of the character.
-// Saved in this browser (IndexedDB).
+// "Add card": one image with the card (character removed) and the cut-out character side by
+// side. It's split apart, the character gets the puffed 3D style and is placed over the art
+// window a little larger so it breaks out of the frame. Adjust if needed, then save in this
+// browser (IndexedDB).
 (() => {
   const $ = (id) => document.getElementById(id);
   const P = window.HoloProcess, app = window.HoloApp;
@@ -43,10 +42,9 @@
     URL.revokeObjectURL(c.art); URL.revokeObjectURL(c.pop.src);
   };
 
-  // ---------- step 1: one photo ----------
+  // ---------- step 1: one image ----------
   const editor = $('editor'), status = $('pickStatus');
-  // made: { card, crop, x0, y0, seg, points, win {l,t,r,b} %, erased, char, pos {l,t,w} % }
-  let made = null, busy = false;
+  let made = null, busy = false; // { card, char, pos {l,t,w}, win {l,t,r,b} } in % of the card
 
   function open() {
     made = null;
@@ -74,21 +72,18 @@
     busy = true;
     try {
       if (!$('cardName').value) $('cardName').value = f.name.replace(/\.[^.]+$/, '');
-      await say('Finding the card…');
-      const card = P.cropCard(await P.loadImage(f));
-      const w = P.findWindow(card);
-      const { crop, x, y } = P.windowCrop(card, w);
-      await say('Looking at the art…');
-      const seg = await P.segmenter(crop, (frac) => {
-        status.textContent = `Downloading the cut-out tool (first time only)… ${Math.round(frac * 100)}%`;
-      });
-      made = {
-        card, crop, x0: x, y0: y, seg,
-        win: { l: w.l * 100, t: w.t * 100, r: w.r * 100, b: w.b * 100 },
-        points: [{ x: crop.width * 0.55, y: crop.height * 0.62, on: true }], // the character is usually here
-      };
-      await say('Cutting out the character…');
-      await rebuild();
+      await say('Splitting the card and the character…');
+      const split = P.splitLayered(await P.loadImage(f));
+      if (!split) throw new Error('Use one image with the card (character removed) on one side and the cut-out character on the other.');
+      await say('Adding the 3D shading…');
+      const char = P.stylize(split.char);
+      const w = P.findWindow(split.card);
+      const win = { l: w.l * 100, t: w.t * 100, r: w.r * 100, b: w.b * 100 };
+      // centre it on the art window, 8% wider than the window, so it breaks out of the frame
+      const wPct = (win.r - win.l) * 1.08;
+      const hPct = (wPct / 100) * split.card.width * (char.height / char.width) / split.card.height * 100;
+      const pos = { w: wPct, l: (win.l + win.r) / 2 - wPct / 2, t: (win.t + win.b) / 2 - hPct / 2 };
+      made = { card: split.card, char, pos, win };
       status.textContent = 'Ready.';
       $('nextPick').disabled = false;
       showPlace();
@@ -100,27 +95,11 @@
     }
   };
 
-  // tap points -> mask -> character cut out, card painted over, 3D style, placement
-  async function rebuild() {
-    const mask = await made.seg(made.points);
-    const full = P.applyMask(made.crop, mask);
-    const cut = P.trimAt(full);
-    if (!cut) throw new Error('Could not find a character in the art. Try a straighter, closer photo.');
-    made.erased = P.eraseFromCard(made.card, full, made.x0, made.y0);
-    made.char = P.stylize(cut.canvas);
-    // where it was, in % of the card; then 10% bigger with its feet fixed, so it breaks out of the frame
-    const W = made.card.width, H = made.card.height;
-    const w0 = (made.char.width / W) * 100, l0 = ((made.x0 + cut.x) / W) * 100, t0 = ((made.y0 + cut.y) / H) * 100;
-    const h0 = (made.char.height / H) * 100, grow = 1.1;
-    made.pos = { w: w0 * grow, l: l0 + w0 / 2 - (w0 * grow) / 2, t: t0 + h0 - h0 * grow };
-  }
-
   // ---------- step 2: check and adjust ----------
   const place = $('place'), placeChar = $('placeChar'), winBox = $('win'), size = $('charSize');
-  let tapAdds = true;
 
   function showPlace() {
-    $('placeArt').src = made.erased.toDataURL('image/jpeg', 0.9);
+    $('placeArt').src = made.card.toDataURL('image/jpeg', 0.9);
     placeChar.src = made.char.toDataURL('image/png');
     size.value = Math.round(made.pos.w);
     $('stepPick').hidden = true; $('stepPlace').hidden = false;
@@ -142,63 +121,26 @@
     const ch = (charHeightPct() / 100) * H, end = ((win.b - pos.t) / 100) * H;
     placeChar.style.webkitMaskImage = placeChar.style.maskImage =
       `linear-gradient(to bottom, #000 ${end - 0.07 * ch}px, transparent ${end}px)`;
-    $('tapMode').textContent = tapAdds ? 'Tapping adds' : 'Tapping removes';
-    $('tapMode').classList.toggle('removing', !tapAdds);
   }
 
-  async function redo(change) {
-    if (busy) return;
-    busy = true; place.classList.add('working');
-    const before = made.points;
-    try {
-      change();
-      await paint();
-      await rebuild();
-      showPlace();
-    } catch (err) {
-      made.points = before;
-      alert(err.message);
-    } finally {
-      busy = false; place.classList.remove('working');
-    }
-  }
-
-  // tap on the card = add/remove that spot from the character
-  function tapAt(e) {
-    const r = place.getBoundingClientRect();
-    const x = ((e.clientX - r.left) / r.width) * made.card.width - made.x0;
-    const y = ((e.clientY - r.top) / r.height) * made.card.height - made.y0;
-    if (x < 0 || y < 0 || x >= made.crop.width || y >= made.crop.height) return; // outside the art window
-    redo(() => { made.points = [...made.points, { x, y, on: tapAdds }]; });
-  }
-  $('tapMode').onclick = () => { tapAdds = !tapAdds; render(); };
-  $('tapReset').onclick = () => redo(() => { made.points = made.points.slice(0, 1); });
-
-  // drags move things; a press without movement counts as a tap
   function dragger(el, onMove) {
-    let last = null, moved = 0;
+    let last = null;
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault(); e.stopPropagation();
       el.setPointerCapture(e.pointerId);
-      last = { x: e.clientX, y: e.clientY }; moved = 0;
+      last = { x: e.clientX, y: e.clientY };
     });
     el.addEventListener('pointermove', (e) => {
       if (!last) return;
-      const dx = e.clientX - last.x, dy = e.clientY - last.y;
-      moved += Math.abs(dx) + Math.abs(dy);
-      if (moved < 6) return;
-      onMove((dx / place.clientWidth) * 100, (dy / place.clientHeight) * 100);
+      onMove((e.clientX - last.x) / place.clientWidth * 100, (e.clientY - last.y) / place.clientHeight * 100);
       last = { x: e.clientX, y: e.clientY };
       render();
     });
-    el.addEventListener('pointerup', (e) => {
-      if (last && moved < 6) tapAt(e);
-      last = null;
-    });
-    el.addEventListener('pointercancel', () => { last = null; });
+    const end = () => { last = null; };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
   }
   dragger(placeChar, (dx, dy) => { made.pos.l += dx; made.pos.t += dy; });
-  dragger($('placeArt'), () => {});
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
   for (const edge of winBox.querySelectorAll('[data-edge]')) {
     const k = edge.dataset.edge;
@@ -211,10 +153,10 @@
     });
   }
   size.oninput = () => {
-    const p = made.pos, centre = p.l + p.w / 2, feet = p.t + charHeightPct();
+    const p = made.pos, cx = p.l + p.w / 2, cy = p.t + charHeightPct() / 2;
     p.w = +size.value;
-    p.l = centre - p.w / 2;
-    p.t = feet - charHeightPct();
+    p.l = cx - p.w / 2;
+    p.t = cy - charHeightPct() / 2;
     render();
   };
 
@@ -227,7 +169,7 @@
       const rec = {
         id: Date.now().toString(36),
         name: $('cardName').value.trim() || 'My card',
-        art: await P.toBlob(made.erased, 'image/jpeg', 0.9),
+        art: await P.toBlob(made.card, 'image/jpeg', 0.9),
         pop: await P.toBlob(pop, 'image/png'),
         box: [pos.l, pos.t, pos.w, h],
         holo: [win.l, win.t, win.r - win.l, win.b - win.t],

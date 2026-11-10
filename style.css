@@ -80,7 +80,7 @@ body {
 }
 
 .controls {
-  flex: none; height: 70px; display: flex; align-items: center; justify-content: center; gap: 10px;
+  flex: none; height: calc(70px + env(safe-area-inset-bottom)); display: flex; align-items: center; justify-content: center; gap: 10px;
   padding-bottom: env(safe-area-inset-bottom);
 }
 .controls button, .motion {

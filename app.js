@@ -135,7 +135,7 @@
       hue: Math.random() < 0.6 ? 50 : Math.random() * 360,
       depth: 0.3 + Math.random(),
     }));
-    glitter = Array.from({ length: Math.round(area / 80) }, () => ({
+    glitter = Array.from({ length: Math.round(area / 160) }, () => ({
       x: Math.random(), y: Math.random(),
       r: 1 + Math.random() ** 2 * 2.6,
       depth: Math.random() ** 1.5,          // 0 = near the card, 1 = deep behind it

@@ -66,7 +66,7 @@
   // ---------- tilt: pointer, phone motion, or idle wobble ----------
   const target = { x: 0, y: 0 }, cur = { x: 0, y: 0 };
   let lastInput = -1e9;
-  const MAX = 16; // degrees
+  const MAX = 6; // degrees: the card itself barely turns
 
   function aim(nx, ny) {
     target.x = Math.max(-1, Math.min(1, nx));
@@ -116,21 +116,52 @@
   }
 
   // ---------- sparkles ----------
-  let stars = [];
+  // A few big twinkling stars over the whole card, plus dense hologram glitter in the
+  // card's art window. The glitter sits at different depths and slides with the tilt
+  // far more than the card turns; that's what makes it feel 3D.
+  let stars = [], glitter = [];
+  const GLITTER_COLORS = [190, 300, 50, 160, 330, 210];
   function sizeSparkles() {
     const dpr = Math.min(devicePixelRatio || 1, 2);
     canvas.width = canvas.clientWidth * dpr;
     canvas.height = canvas.clientHeight * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const n = Math.round((canvas.clientWidth * canvas.clientHeight) / 1500);
-    stars = Array.from({ length: n }, () => ({
+    const area = canvas.clientWidth * canvas.clientHeight;
+    stars = Array.from({ length: Math.round(area / 9000) }, () => ({
       x: Math.random(), y: Math.random(),
-      r: 2 + Math.random() ** 3 * 9,
-      speed: 0.6 + Math.random() * 1.8,
+      r: 3 + Math.random() ** 2 * 7,
+      speed: 0.6 + Math.random() * 1.5,
       phase: Math.random() * Math.PI * 2,
-      hue: Math.random() < 0.55 ? 50 : Math.random() * 360,
+      hue: Math.random() < 0.6 ? 50 : Math.random() * 360,
       depth: 0.3 + Math.random(),
     }));
+    glitter = Array.from({ length: Math.round(area / 80) }, () => ({
+      x: Math.random(), y: Math.random(),
+      r: 1 + Math.random() ** 2 * 2.6,
+      depth: Math.random() ** 1.5,          // 0 = near the card, 1 = deep behind it
+      hue: GLITTER_COLORS[(Math.random() * GLITTER_COLORS.length) | 0],
+      speed: 1 + Math.random() * 3,
+      phase: Math.random() * Math.PI * 2,
+    }));
+  }
+
+  function drawGlitter(t, w, h) {
+    const box = cards[index].holo;
+    if (!box) return;
+    const bx = (box[0] / 100) * w, by = (box[1] / 100) * h, bw = (box[2] / 100) * w, bh = (box[3] / 100) * h;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(bx, by, bw, bh); ctx.clip();
+    const SHIFT = 70; // px of slide at full tilt for the deepest glitter
+    for (const g of glitter) {
+      // deeper specks slide further, and wrap around inside the window
+      let x = (g.x * bw - cur.x * SHIFT * (0.25 + g.depth)) % bw; if (x < 0) x += bw;
+      let y = (g.y * bh - cur.y * SHIFT * 0.7 * (0.25 + g.depth)) % bh; if (y < 0) y += bh;
+      // each speck flashes as the angle sweeps past it, like real holo foil
+      const a = 0.25 + 0.75 * Math.max(0, Math.sin(g.phase + t * g.speed * 0.4 + (cur.x - cur.y) * 6 * g.speed)) ** 3;
+      ctx.fillStyle = `hsla(${g.hue}, 100%, ${62 + 30 * a}%, ${0.35 + a * 0.65})`;
+      ctx.fillRect(bx + x, by + y, g.r * (1.2 - g.depth * 0.5), g.r * (1.2 - g.depth * 0.5));
+    }
+    ctx.restore();
   }
 
   function star(x, y, r) {
@@ -148,10 +179,11 @@
     const w = canvas.clientWidth, h = canvas.clientHeight;
     ctx.clearRect(0, 0, w, h);
     ctx.globalCompositeOperation = 'lighter';
+    drawGlitter(t, w, h);
     for (const s of stars) {
       const a = Math.max(0, Math.sin(s.phase + t * s.speed)) ** 4;
       if (a < 0.02) continue;
-      const x = s.x * w + cur.x * 10 * s.depth, y = s.y * h + cur.y * 10 * s.depth;
+      const x = s.x * w - cur.x * 30 * s.depth, y = s.y * h - cur.y * 30 * s.depth;
       ctx.fillStyle = `hsla(${s.hue}, 100%, 82%, ${a})`;
       star(x, y, s.r * (0.6 + 0.4 * a));
       if (s.r > 5) { ctx.fillStyle = `rgba(255,255,255,${a * 0.9})`; star(x, y, s.r * 0.35); }

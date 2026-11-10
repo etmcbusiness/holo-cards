@@ -69,7 +69,7 @@ body {
   /* fade into the card at the cut line instead of a hard edge */
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 9%), transparent);
           mask-image: linear-gradient(to bottom, #000 calc(100% - 9%), transparent);
-  transform: translateZ(60px);
+  transform: translateZ(22px);
 }
 .pop.on { display: block; }
 .pop .float { position: absolute; }

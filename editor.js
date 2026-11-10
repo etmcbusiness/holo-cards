@@ -42,39 +42,47 @@
     URL.revokeObjectURL(c.art); URL.revokeObjectURL(c.pop.src);
   };
 
-  // ---------- step 1: one image ----------
+  // ---------- step 1: "+ Add card" opens the photo picker; then it all happens ----------
   const editor = $('editor'), status = $('pickStatus');
-  let made = null, busy = false; // { card, char, pos {l,t,w}, win {l,t,r,b} } in % of the card
+  let made = null, busy = false, holoOn = true; // made: { card, char, pos {l,t,w}, win {l,t,r,b} } in % of the card
 
-  function open() {
-    made = null;
-    $('fileCard').value = $('cardName').value = '';
-    status.textContent = '';
-    $('nextPick').disabled = true;
-    $('stepPick').hidden = false; $('stepPlace').hidden = true;
-    editor.hidden = false;
-    document.body.classList.add('editing');
-  }
+  const pickPhoto = () => { $('fileCard').value = ''; $('fileCard').click(); };
   function close() {
     editor.hidden = true;
     document.body.classList.remove('editing');
   }
-  $('add').onclick = open;
+  function showWork(msg, failed = false) {
+    editor.hidden = false;
+    document.body.classList.add('editing');
+    $('stepWork').hidden = false; $('stepPlace').hidden = true;
+    status.textContent = msg;
+    $('spinner').hidden = failed;
+    $('retryPick').hidden = !failed;
+  }
+  $('add').onclick = pickPhoto;
+  $('retryPick').onclick = pickPhoto;
   $('cancelPick').onclick = close;
+  $('backPlace').onclick = close;
 
   const paint = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 30))); // let the status show
-  const say = async (msg) => { status.textContent = msg; await paint(); };
+  const say = async (msg) => { showWork(msg); await paint(); };
+
+  function setHolo(on) {
+    holoOn = on;
+    $('holoToggle').setAttribute('aria-pressed', on);
+    $('holoToggle').textContent = on ? '✨ Holo glitter: On' : 'Holo glitter: Off';
+  }
+  $('holoToggle').onclick = () => setHolo(!holoOn);
 
   $('fileCard').onchange = async (e) => {
     const f = e.target.files[0];
-    made = null; $('nextPick').disabled = true;
     if (!f || busy) return;
-    busy = true;
+    busy = true; made = null;
     try {
-      if (!$('cardName').value) $('cardName').value = f.name.replace(/\.[^.]+$/, '');
+      $('cardName').value = '';
       await say('Splitting the card and the character…');
       const split = P.splitLayered(await P.loadImage(f));
-      if (!split) throw new Error('Use one image with the card (character removed) on one side and the cut-out character on the other.');
+      if (!split) throw new Error('This photo needs the card (character removed) on one side and the cut-out character on the other.');
       await say('Lining it up…');
       const card = split.card, aspect = split.char.height / split.char.width;
       const hOf = (wPct) => (wPct / 100) * card.width * aspect / card.height * 100;
@@ -93,16 +101,14 @@
         pos = { w: w1, l: (win.l + win.r) / 2 - w1 / 2, t: (win.t + win.b) / 2 - hOf(w1) / 2 };
       }
       const glitter = P.glitterFor(card, w);
-      $('holo').checked = glitter.holo;
+      setHolo(glitter.holo);
       await say('Adding the 3D shading…');
       const char = P.stylize(split.char);
       made = { card, char, pos, win, hues: glitter.hues };
-      status.textContent = 'Ready.';
-      $('nextPick').disabled = false;
       showPlace();
     } catch (err) {
       console.error(err);
-      status.textContent = err.message || 'Something went wrong.';
+      showWork(err.message || 'Something went wrong.', true);
     } finally {
       busy = false;
     }
@@ -115,11 +121,9 @@
     $('placeArt').src = made.card.toDataURL('image/jpeg', 0.9);
     placeChar.src = made.char.toDataURL('image/png');
     size.value = Math.round(made.pos.w);
-    $('stepPick').hidden = true; $('stepPlace').hidden = false;
+    $('stepWork').hidden = true; $('stepPlace').hidden = false;
     requestAnimationFrame(render);
   }
-  $('nextPick').onclick = showPlace;
-  $('backPlace').onclick = () => { $('stepPick').hidden = false; $('stepPlace').hidden = true; };
 
   const charHeightPct = () => {
     const W = place.clientWidth, H = place.clientHeight;
@@ -181,12 +185,12 @@
       const pop = P.fadeBottom(made.char, (win.b - pos.t) / h);
       const rec = {
         id: Date.now().toString(36),
-        name: $('cardName').value.trim() || 'My card',
+        name: $('cardName').value.trim() || `Card ${new Date().toLocaleDateString()}`,
         art: await P.toBlob(made.card, 'image/jpeg', 0.9),
         pop: await P.toBlob(pop, 'image/png'),
         box: [pos.l, pos.t, pos.w, h],
         holo: [win.l, win.t, win.r - win.l, win.b - win.t],
-        glitter: $('holo').checked ? made.hues : false,
+        glitter: holoOn ? made.hues : false,
       };
       await req('readwrite', (s) => s.put(rec));
       app.add(toCard(rec), true);

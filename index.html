@@ -36,27 +36,17 @@
     <button id="remove" hidden>Remove</button>
   </nav>
 
-  <!-- add-a-card flow (editor.js) -->
+  <!-- add-a-card flow (editor.js): "+ Add card" opens the photo picker straight away -->
+  <input type="file" id="fileCard" accept="image/*" hidden>
   <section class="editor" id="editor" hidden>
-    <div class="step" id="stepPick">
-      <h2>Add a card</h2>
-      <label class="pick">
-        <span>One image: the card (character removed) and the cut-out character side by side</span>
-        <input type="file" id="fileCard" accept="image/*">
-      </label>
-      <label class="pick">
-        <span>Name (optional)</span>
-        <input type="text" id="cardName" placeholder="e.g. Base Set Charizard">
-      </label>
-      <p class="status" id="pickStatus"></p>
-      <div class="row">
-        <button id="cancelPick">Cancel</button>
-        <button id="nextPick" class="primary" disabled>Next</button>
-      </div>
+    <div class="step" id="stepWork">
+      <div class="spinner" id="spinner"></div>
+      <p class="status big" id="pickStatus"></p>
+      <button class="big primary" id="retryPick" hidden>Choose another photo</button>
+      <button class="big" id="cancelPick">Cancel</button>
     </div>
 
     <div class="step" id="stepPlace" hidden>
-      <p class="hint">Looks right? Save it. Otherwise drag the character, resize it, or drag the dashed edges to fit the art window (glitter goes inside; the character fades at its bottom).</p>
       <div class="place" id="place">
         <img id="placeArt" alt="">
         <div class="win" id="win">
@@ -64,12 +54,12 @@
         </div>
         <img id="placeChar" alt="">
       </div>
+      <p class="hint">Drag the character to move it. Drag the dashed box edges to fit the art window.</p>
       <label class="size">Size <input type="range" id="charSize" min="20" max="160" value="94"></label>
-      <label class="size"><input type="checkbox" id="holo"> Holo glitter (matched to the card's colours)</label>
-      <div class="row">
-        <button id="backPlace">Back</button>
-        <button id="savePlace" class="primary">Save card</button>
-      </div>
+      <button class="big toggle" id="holoToggle" aria-pressed="true">✨ Holo glitter: On</button>
+      <input type="text" id="cardName" placeholder="Card name (optional)">
+      <button class="big primary" id="savePlace">Save card</button>
+      <button class="big" id="backPlace">Cancel</button>
     </div>
   </section>
 

@@ -7,9 +7,20 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main class="stage" id="stage"></main>
+  <main class="stage" id="stage">
+    <div class="card" id="card">
+      <div class="face">
+        <img class="art" id="art" alt="">
+        <div class="holo"></div>
+        <canvas class="sparkles" id="sparkles"></canvas>
+        <div class="glare"></div>
+        <div class="stripes"></div>
+      </div>
+      <div class="pop" id="pop"><div class="float"><img id="popImg" alt=""><div class="stripes"></div></div></div>
+    </div>
+  </main>
 
-  <nav class="controls" id="controls">
+  <nav class="controls">
     <button id="prev" aria-label="Previous card">◀</button>
     <span id="dots" class="dots"></span>
     <button id="next" aria-label="Next card">▶</button>
@@ -17,6 +28,6 @@
   <button id="motion" class="motion" hidden>Tilt with phone</button>
 
   <script src="cards.js"></script>
-  <script type="module" src="app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

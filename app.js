@@ -85,7 +85,7 @@
     if (e.key === 'ArrowRight') show(index + 1);
   });
 
-  // ---------- tilt: pointer, phone motion, or idle wobble ----------
+  // ---------- tilt: finger/mouse, or idle wobble ----------
   const target = { x: 0, y: 0 }, cur = { x: 0, y: 0 };
   let lastInput = -1e9;
   const MAX = 6; // degrees: the card itself barely turns
@@ -115,27 +115,6 @@
   stage.addEventListener('pointerup', release);
   stage.addEventListener('pointercancel', release);
 
-  let base = null;
-  function onOrient(e) {
-    if (e.beta == null) return;
-    if (!base) base = { b: e.beta, g: e.gamma };
-    aim((e.gamma - base.g) / 25, (e.beta - base.b) / 25);
-  }
-  const DOE = window.DeviceOrientationEvent;
-  const touch = matchMedia('(pointer: coarse)').matches;
-  if (touch && DOE && typeof DOE.requestPermission === 'function') {
-    // iOS asks before giving motion data
-    const btn = $('motion');
-    btn.hidden = false;
-    btn.onclick = async () => {
-      if ((await DOE.requestPermission().catch(() => 'denied')) === 'granted') {
-        addEventListener('deviceorientation', onOrient);
-        btn.hidden = true;
-      } else btn.textContent = 'Motion blocked';
-    };
-  } else if (touch && DOE) {
-    addEventListener('deviceorientation', onOrient);
-  }
 
   // ---------- sparkles ----------
   // A few big twinkling stars over the whole card, plus dense hologram glitter in the

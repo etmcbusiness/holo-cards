@@ -83,14 +83,13 @@ body {
   flex: none; height: calc(70px + env(safe-area-inset-bottom)); display: flex; align-items: center; justify-content: center; gap: 10px;
   padding-bottom: env(safe-area-inset-bottom);
 }
-.controls button, .motion {
+.controls button {
   font: inherit; font-size: 15px; color: #eee; background: #2a2b33; border: 1px solid #444;
   border-radius: 8px; padding: 8px 14px; cursor: pointer;
 }
 .dots { display: flex; gap: 8px; }
 .dots i { width: 8px; height: 8px; border-radius: 50%; background: #555; }
 .dots i.on { background: #eee; }
-.motion { position: fixed; top: calc(12px + env(safe-area-inset-top)); right: 12px; }
 
 .controls #add { background: #3a4fd8; border-color: #5b6ff0; }
 [hidden] { display: none !important; }

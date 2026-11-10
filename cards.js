@@ -23,8 +23,8 @@ window.CARDS = [
   {
     name: 'Base Set Charizard',
     art: 'cards/base-charizard.jpg',
-    holo: [12, 10.9, 79, 41.4],
-    glitter: [45, 15, 195, 335],
-    pop: { src: 'cards/base-charizard-pop.png', box: [25.4, 13.6, 67.2, 37.9] },
+    holo: [11.3, 11.1, 79, 40.7],
+    glitter: [45, 15],
+    pop: { src: 'cards/base-charizard-pop.png', box: [7.4, 12.1, 85.1, 42.3] },
   },
 ];

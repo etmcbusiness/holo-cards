@@ -109,7 +109,7 @@ window.HoloProcess = (() => {
     // is checkerboard; a white claw or a black shadow is mostly one tone.
     const seen = new Uint8Array(N), minPocket = Math.max(300, N * 0.0008);
     for (let s = 0; s < N; s++) {
-      if (tones.length < 2) break;
+      if (tones.length < 2 || !plain) break; // characters only: a card has no enclosed background
       if (back[s] || seen[s] || !isBg(s)) continue;
       const pocket = [], st = [s];
       let hi = 0, lo = 0;

@@ -78,10 +78,12 @@ body {
 #popImg {
   filter: drop-shadow(calc(var(--px) * -10px + 4px) calc(var(--py) * -10px + 10px) 7px rgba(0,0,0,.5));
 }
-/* echo copies of the character in its own colours, spreading apart as the card tilts */
-.pop .ghost { opacity: .5; }
-.pop .g1 { transform: translate(calc(-1px - var(--px) * 3px), calc(var(--py) * -1px)); filter: brightness(1.25); }
-.pop .g2 { transform: translate(calc(1px + var(--px) * 3px), calc(var(--py) * 1px)); filter: brightness(.75); }
+/* stacked copies behind the character, each a step further out and a little darker:
+   reads as the curved side of a solid shape, showing more as the card tilts */
+.pop .ghost { --s: 1; transform: translate(calc(var(--px) * var(--s) * -5px), calc(var(--py) * var(--s) * -4px)); }
+.pop .g1 { --s: .34; filter: brightness(.88) blur(.3px); }
+.pop .g2 { --s: .67; filter: brightness(.74) blur(.5px); }
+.pop .g3 { --s: 1;   filter: brightness(.6) blur(.7px); }
 /* stripes only where the character is */
 .pop .stripes {
   -webkit-mask: var(--pop-src) center / 100% 100% no-repeat;

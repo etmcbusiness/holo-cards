@@ -1,12 +1,12 @@
 // Gemini image editing, called straight from this browser with the user's own API key
 // (kept in this browser's localStorage only, never in the code).
-//   separate(card) -> { erased, characterOnWhite }: two edits of the same card photo, run
-//   together: the card with the character painted out, and the character alone, in place,
-//   on plain white.
+//   layered(card) -> one image: the card with the character painted out, and the character
+//   cut out beside it, on white. One call per card, cheapest model first.
 window.HoloAI = (() => {
   const KEY = 'holo-gemini-key';
   // newest first; a model this key can't use (404) falls through to the next
-  const MODELS = ['gemini-nano-banana-2.1', 'gemini-3.1-flash-image', 'gemini-2.5-flash-image'];
+  // cheapest first (one 1K image per card); a model this key can't use (404) falls through
+  const MODELS = ['gemini-3.1-flash-lite-image', 'gemini-2.5-flash-image', 'gemini-3.1-flash-image'];
   const URL = (m) => `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`;
 
   const getKey = () => { try { return localStorage.getItem(KEY) || ''; } catch { return ''; } };
@@ -14,11 +14,11 @@ window.HoloAI = (() => {
 
   class KeyError extends Error {}
 
-  async function edit(prompt, canvas) {
+  async function edit(prompt, canvas, aspectRatio) {
     const data = canvas.toDataURL('image/jpeg', 0.92).split(',')[1];
     const body = JSON.stringify({
       contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: 'image/jpeg', data } }] }],
-      generationConfig: { responseModalities: ['IMAGE'] },
+      generationConfig: { responseModalities: ['IMAGE'], ...(aspectRatio && { imageConfig: { aspectRatio } }) },
     });
     let lastErr = null;
     for (const model of MODELS) {
@@ -46,33 +46,29 @@ window.HoloAI = (() => {
       const img = parts.find((p) => p.inlineData || p.inline_data);
       if (!img) throw new Error("Gemini didn't return an image. Try a clearer photo.");
       const { data: out, mimeType, mime_type } = img.inlineData || img.inline_data;
-      return toCanvas(`data:${mimeType || mime_type || 'image/png'};base64,${out}`, canvas.width, canvas.height);
+      return toCanvas(`data:${mimeType || mime_type || 'image/png'};base64,${out}`);
     }
     throw lastErr;
   }
 
-  // decode and resize to the size of the photo that was sent, so positions line up
-  async function toCanvas(src, w, h) {
+  async function toCanvas(src) {
     const img = new Image();
     img.src = src;
     await img.decode();
-    const c = Object.assign(document.createElement('canvas'), { width: w, height: h });
-    c.getContext('2d', { willReadFrequently: true }).drawImage(img, 0, 0, w, h);
+    const c = Object.assign(document.createElement('canvas'), { width: img.naturalWidth, height: img.naturalHeight });
+    c.getContext('2d', { willReadFrequently: true }).drawImage(img, 0, 0);
     return c;
   }
 
-  const ERASE = 'This is a photo of a trading card. Remove the main character (the creature or person in the artwork) completely, ' +
-    'including its fire, breath or effects. Repaint the artwork background where it was so it matches the surrounding art seamlessly. ' +
-    'Keep everything else exactly the same: the card frame, border, text, symbols, colours, size, framing and position. Output the whole card.';
-  const ISOLATE = 'This is a photo of a trading card. Keep only the main character from the artwork (the creature or person, with its fire, ' +
-    'breath or effects), exactly where it is, at exactly the same size, angle and colours, with all its detail. Replace everything else ' +
-    '(the art background, the card frame, border and all text) with plain solid white #FFFFFF. Do not move, resize, crop or redraw the character. ' +
-    'Keep the same framing as the photo.';
+  // One call, one image, in the same layout as hand-made layered images, which the app
+  // already knows how to split (process.js splitLayered).
+  const LAYERED = 'This is a photo of a trading card. Make ONE wide image on a plain solid white #FFFFFF background with two things side by side. ' +
+    'LEFT: the whole card, flat and straight, with the main character (the creature or person in the artwork, including its fire, breath or effects) ' +
+    'completely removed and the artwork background repainted seamlessly where it was; keep the frame, border, text and symbols exactly the same. ' +
+    'RIGHT: only that character, cut out cleanly with all its detail and original colours, on the white background, not touching the card. ' +
+    'Do not redraw or restyle anything.';
 
-  const separate = async (card) => {
-    const [erased, characterOnWhite] = await Promise.all([edit(ERASE, card), edit(ISOLATE, card)]);
-    return { erased, characterOnWhite };
-  };
+  const layered = (card) => edit(LAYERED, card, '4:3');
 
-  return { getKey, setKey, separate, KeyError };
+  return { getKey, setKey, layered, KeyError };
 })();

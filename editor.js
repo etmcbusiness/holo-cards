@@ -124,60 +124,63 @@
   const hOfFor = (card, char) => (wPct) => (wPct / 100) * card.width * (char.height / char.width) / card.height * 100;
   const pct = (w) => ({ l: w.l * 100, t: w.t * 100, r: w.r * 100, b: w.b * 100 });
 
-  function fromSplit(split) {
+  // `ref`: the original card photo (character still in it), when the split card is a
+  // repainted copy whose framing may differ a little; positions are then mapped through
+  // the art window, which both share.
+  function fromSplit(split, ref = null) {
     const card = split.card, hOf = hOfFor(card, split.char);
     const w = P.findWindow(card), win = pct(w);
-    // If the card still shows the character, sit on top of it 12% bigger (it covers the
-    // original and breaks out of the frame); otherwise centre it on the art window,
-    // 8% wider than the window.
-    const at = P.locate(card, split.char);
     let pos;
+    const at = P.locate(ref || card, split.char);
     if (at) {
-      const w0 = at.w * 100, cx = at.x * 100 + w0 / 2, cy = at.y * 100 + hOf(w0) / 2, w1 = w0 * 1.12;
+      // sit where the character is on the card, a little bigger so it covers the original
+      // and breaks out of the frame (12% over itself; 6% when the card was repainted)
+      let x0 = at.x, y0 = at.y, x1 = at.x + at.w;
+      if (ref) {
+        const wr = P.findWindow(ref);
+        const map = (v, a, b, A, B) => A + ((v - a) / (b - a)) * (B - A);
+        x0 = map(at.x, wr.l, wr.r, w.l, w.r); x1 = map(at.x + at.w, wr.l, wr.r, w.l, w.r);
+        y0 = map(at.y, wr.t, wr.b, w.t, w.b);
+      }
+      const w0 = (x1 - x0) * 100, cx = x0 * 100 + w0 / 2, cy = y0 * 100 + hOf(w0) / 2, w1 = w0 * (ref ? 1.06 : 1.12);
       pos = { w: w1, l: cx - w1 / 2, t: cy - hOf(w1) / 2 };
     } else {
+      // no match: centre it on the art window, 8% wider than the window
       const w1 = (win.r - win.l) * 1.08;
       pos = { w: w1, l: (win.l + win.r) / 2 - w1 / 2, t: (win.t + win.b) / 2 - hOf(w1) / 2 };
     }
-    const glitter = P.glitterFor(card, w);
+    const glitter = P.glitterFor(ref || card, ref ? P.findWindow(ref) : w);
     setHolo(glitter.holo);
     return { card, char: P.stylize(split.char), pos, win, hues: glitter.hues };
   }
 
-  // A plain photo of a card: Gemini paints the character out and isolates it in place.
+  // A plain photo of a card: one Gemini call returns the card with the character painted
+  // out and the character cut out beside it; that's split like a hand-made layered image.
   async function fromPhoto(img) {
     if (!AI.getKey()) await askForKey();
     await say('Finding the card…');
     const card = P.cropCard(img);
-    await say('Gemini is separating the character from the card… (about 20 seconds)');
     // Gemini's answer for this photo is kept, so trying the same photo again costs nothing
-    const cacheId = `ai:${pending.name}:${pending.size}:${pending.lastModified}`;
-    let erased, characterOnWhite;
+    const cacheId = `ai2:${pending.name}:${pending.size}:${pending.lastModified}`;
     const hit = await req('readonly', (s) => s.get(cacheId)).catch(() => null);
+    let layered;
     if (hit) {
-      [erased, characterOnWhite] = await Promise.all([hit.erased, hit.character].map(async (b) => {
-        const img2 = await P.loadImage(new File([b], 'x.png'));
-        const out = document.createElement('canvas');
-        out.width = card.width; out.height = card.height;
-        out.getContext('2d', { willReadFrequently: true }).drawImage(img2, 0, 0, card.width, card.height);
-        return out;
-      }));
+      layered = await P.loadImage(new File([hit.layered], 'l.png'));
     } else {
-      ({ erased, characterOnWhite } = await AI.separate(card));
-      const keep = { id: cacheId, erased: await P.toBlob(erased, 'image/png'), character: await P.toBlob(characterOnWhite, 'image/png') };
-      await req('readwrite', (s) => s.put(keep)).catch((e) => console.warn('Could not keep the Gemini result:', e));
+      await say('Gemini is separating the character from the card… (about 20 seconds)');
+      layered = await AI.layered(card);
     }
     await say('Adding the 3D shading…');
-    const cut = P.cutout(characterOnWhite, { minPiece: 0.002 });
-    const hOf = hOfFor(card, cut);
-    // exactly where it was, 6% bigger around its middle so it breaks out of the frame
-    const w0 = (cut.width / card.width) * 100;
-    const cx = (cut.offset.x / card.width) * 100 + w0 / 2, cy = (cut.offset.y / card.height) * 100 + hOf(w0) / 2;
-    const w1 = w0 * 1.06, pos = { w: w1, l: cx - w1 / 2, t: cy - hOf(w1) / 2 };
-    const w = P.findWindow(card);
-    const glitter = P.glitterFor(card, w);
-    setHolo(glitter.holo);
-    return { card: erased, char: P.stylize(cut), pos, win: pct(w), hues: glitter.hues };
+    const split = P.splitLayered(layered);
+    if (!split) {
+      await req('readwrite', (s) => s.delete(cacheId)).catch(() => {});
+      throw new Error("Gemini's result didn't come out right this time. Choose the photo again to retry.");
+    }
+    if (!hit) {
+      const keep = { id: cacheId, layered: await P.toBlob(layered, 'image/png') };
+      await req('readwrite', (s) => s.put(keep)).catch((e) => console.warn('Could not keep the Gemini result:', e));
+    }
+    return fromSplit(split, card);
   }
 
   // ---------- step 2: check and adjust ----------

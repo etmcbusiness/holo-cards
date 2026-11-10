@@ -2,6 +2,7 @@
   const $ = (id) => document.getElementById(id);
   const stage = $('stage'), card = $('card'), art = $('art'), pop = $('pop');
   const canvas = $('sparkles'), ctx = canvas.getContext('2d');
+  const amb = $('ambience'), actx = amb.getContext('2d'), bg = $('bg');
   const cards = [...window.CARDS]; // built-in cards; ones added on this device are appended by editor.js
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let index = 0;
@@ -15,7 +16,10 @@
       pop.classList.remove('on');
       art.alt = c.name;
       art.src = c.art;
+      bg.firstElementChild.style.backgroundImage = `url("${c.art}")`;
       applyStyle();
+      buildAmbience();
+      window.HoloValue?.render(c);
       document.title = c.name;
       const i = c.info || {};
       $('caption').querySelector('b').textContent = c.name;
@@ -34,6 +38,9 @@
   window.HoloApp = {
     add(c, select) { cards.push(c); if (select) show(cards.length - 1); else renderControls(); },
     current: () => cards[index],
+    all: () => cards,
+    keyOf: (c) => c.id || `${c.name}|${c.info?.number || ''}`, // one card's key in this browser's storage
+    rerender: () => window.HoloValue?.render(cards[index]),
     removeCurrent() {
       const [c] = cards.splice(index, 1);
       show(Math.min(index, cards.length - 1));
@@ -76,10 +83,11 @@
 
   art.addEventListener('load', () => {
     sizeSparkles();
+    sizeAmbience();
     placePop();
     card.classList.remove('swap');
   });
-  addEventListener('resize', () => { sizeSparkles(); placePop(); });
+  addEventListener('resize', () => { sizeSparkles(); sizeAmbience(); placePop(); });
 
   $('prev').onclick = () => show(index - 1);
   $('next').onclick = () => show(index + 1);
@@ -128,7 +136,7 @@
   const STYLES = ['holo', 'reverse', 'none'];
   const STYLE_NAMES = { holo: 'Holo', reverse: 'Reverse holo', none: 'Non-holo' };
   const GLITTER_COLORS = [190, 300, 50, 160, 330, 210]; // when a card doesn't name its own
-  const styleKey = (c) => `holo-kind:${c.id || `${c.name}|${c.info?.number || ""}`}`;
+  const styleKey = (c) => `holo-kind:${window.HoloApp.keyOf(c)}`;
   function styleOf(c) {
     let saved = null;
     try { saved = localStorage.getItem(styleKey(c)); } catch {}
@@ -136,9 +144,22 @@
     if (STYLES.includes(c.style)) return c.style;
     return c.glitter === false ? 'none' : 'holo';
   }
+  // the art window, [left, top, width, height] in % of the card
+  const windowOf = (c) => c.holo || [8, 10, 84, 38];
   function applyStyle() {
-    const st = styleOf(cards[index]);
+    const c = cards[index], st = styleOf(c);
     card.dataset.holo = st; // CSS: no foil on non-holo cards
+    // Foil and shine where real cards have them: holo only in the art window, reverse holo
+    // everywhere except the art window.
+    const [l, t, w, h] = windowOf(c), r = l + w, b = t + h;
+    card.style.setProperty('--foil', st === 'reverse'
+      ? `polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${l}% ${t}%, ${r}% ${t}%, ${r}% ${b}%, ${l}% ${b}%, ${l}% ${t}%)`
+      : `inset(${t}% ${100 - r}% ${100 - b}% ${l}%)`);
+    // the background inside the art window drifts a little behind the frame (not on full-art
+    // cards, where the text sits on the picture)
+    bg.hidden = h > 80;
+    bg.style.clipPath = `inset(${t}% ${100 - r}% ${100 - b}% ${l}%)`;
+    bg.firstElementChild.style.transformOrigin = `${l + w / 2}% ${t + h / 2}%`;
     $('styleBtn').textContent = `✨ ${STYLE_NAMES[st]}`;
     buildParticles();
   }
@@ -221,6 +242,147 @@
     ctx.restore();
   }
 
+  // ---------- ambience: a gentle animation in the art window, behind the character ----------
+  // Each card gets the one that suits its picture (Gemini picks it when the card is added;
+  // otherwise it's guessed from the card's colours). All are drawn from time alone, so there's
+  // no state to keep, and they shift a little with the tilt for depth.
+  const AMBIENCE = {
+    embers: { per: 1500, hues: [28, 18, 40] },
+    bubbles: { per: 3800, hues: [195, 205] },
+    leaves: { per: 6500, hues: [95, 75, 125] },
+    petals: { per: 6500, hues: [335, 350, 315] },
+    sparks: { per: 9000, hues: [55, 195] },
+    snow: { per: 2600, hues: [-1] },
+    mist: { per: 30000, hues: null },
+    stars: { per: 2600, hues: null },
+    dust: { per: 2600, hues: null },
+  };
+  function ambienceOf(c) {
+    if (AMBIENCE[c.ambience]) return c.ambience;
+    const h = Array.isArray(c.glitter) && c.glitter.length ? c.glitter[0] : null;
+    if (h === null) return 'dust';
+    return h < 50 || h >= 345 ? 'embers' : h < 70 ? 'sparks' : h < 170 ? 'leaves' : h < 250 ? 'bubbles' : h < 300 ? 'stars' : 'petals';
+  }
+  let motes = [], ambType = 'dust';
+  const sprites = new Map(); // soft round glow per colour, drawn once
+  function sprite(hue, light = 70) {
+    const k = `${hue}/${light}`;
+    if (!sprites.has(k)) {
+      const sc = Object.assign(document.createElement('canvas'), { width: 32, height: 32 }), g = sc.getContext('2d');
+      const grd = g.createRadialGradient(16, 16, 0, 16, 16, 16), col = hue < 0 ? '255,255,255' : null;
+      const c0 = col ? `rgba(${col},1)` : `hsla(${hue},100%,${light + 15}%,1)`;
+      const c1 = col ? `rgba(${col},.35)` : `hsla(${hue},100%,${light}%,.35)`;
+      grd.addColorStop(0, c0); grd.addColorStop(0.35, c1); grd.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = grd; g.fillRect(0, 0, 32, 32);
+      sprites.set(k, sc);
+    }
+    return sprites.get(k);
+  }
+  function sizeAmbience() {
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    amb.width = amb.clientWidth * dpr;
+    amb.height = amb.clientHeight * dpr;
+    actx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    buildAmbience();
+  }
+  function buildAmbience() {
+    const c = cards[index];
+    ambType = ambienceOf(c);
+    const cfg = AMBIENCE[ambType], [, , w, h] = windowOf(c);
+    const area = (amb.clientWidth * w / 100) * (amb.clientHeight * h / 100);
+    const hues = cfg.hues || (Array.isArray(c.glitter) && c.glitter.length ? c.glitter : [45, 200]);
+    motes = Array.from({ length: Math.max(3, Math.round(area / cfg.per)) }, () => ({
+      x: Math.random(), y: Math.random(), depth: Math.random(), phase: Math.random(),
+      speed: rnd(0.6, 1.4), size: rnd(0.6, 1.4), hue: hues[(Math.random() * hues.length) | 0], spin: rnd(-1, 1),
+    }));
+  }
+  function drawAmbience(t) {
+    const W = amb.clientWidth, H = amb.clientHeight;
+    actx.clearRect(0, 0, W, H);
+    if (!motes.length || reduceMotion) return;
+    const [l, tp, w, h] = windowOf(cards[index]);
+    const bx = (l / 100) * W, by = (tp / 100) * H, bw = (w / 100) * W, bh = (h / 100) * H;
+    const u = W / 200; // size unit: half a percent of the card, the same on every card
+    actx.save();
+    actx.beginPath(); actx.rect(bx, by, bw, bh); actx.clip();
+    const frac = (v) => v - Math.floor(v);
+    for (const m of motes) {
+      const px = -cur.x * 12 * (0.3 + m.depth), py = -cur.y * 9 * (0.3 + m.depth); // parallax
+      const life = frac(t * 0.06 * m.speed + m.phase); // 0..1, loops
+      const fade = Math.sin(Math.PI * life);
+      let x = bx + m.x * bw + px, y, a = 1, r = u * m.size * 1.8;
+      switch (ambType) {
+        case 'embers': // rise and flicker, swaying
+          y = by + bh * (1.05 - life * 1.15); x += Math.sin(t * 1.3 * m.speed + m.phase * 9) * u * 3;
+          a = fade * (0.6 + 0.4 * Math.sin(t * 9 * m.speed + m.phase * 20)); r *= 2.4;
+          actx.globalCompositeOperation = 'lighter';
+          actx.globalAlpha = Math.max(0, a); actx.drawImage(sprite(m.hue, 62), x - r * 2.5, y - r * 2.5, r * 5, r * 5);
+          actx.drawImage(sprite(-1), x - r * 0.8, y - r * 0.8, r * 1.6, r * 1.6); // white-hot core
+          break;
+        case 'bubbles': // rise, wobble, little rings
+          y = by + bh * (1.05 - life * 1.15) + py; x += Math.sin(t * 2 * m.speed + m.phase * 9) * u * 1.5;
+          r *= 1.3 + m.depth * 1.5;
+          actx.globalCompositeOperation = 'source-over';
+          actx.globalAlpha = fade * 0.55;
+          actx.strokeStyle = `hsla(${m.hue},90%,85%,1)`; actx.lineWidth = Math.max(0.6, r * 0.18);
+          actx.beginPath(); actx.arc(x, y, r, 0, 7); actx.stroke();
+          actx.fillStyle = 'rgba(255,255,255,.8)'; actx.beginPath(); actx.arc(x - r * 0.35, y - r * 0.35, r * 0.22, 0, 7); actx.fill();
+          break;
+        case 'leaves': case 'petals': { // drift down and across, turning
+          y = by + bh * (-0.05 + life * 1.1) + py; x += Math.sin(t * 0.9 * m.speed + m.phase * 9) * u * 6 + life * u * 10;
+          const len = r * (ambType === 'leaves' ? 3.2 : 2.4), wid = len * (0.35 + 0.25 * Math.abs(Math.sin(t * 1.5 * m.spin + m.phase * 9)));
+          actx.globalCompositeOperation = 'source-over';
+          actx.globalAlpha = fade * 0.75;
+          actx.fillStyle = `hsla(${m.hue},${ambType === 'leaves' ? 55 : 80}%,${ambType === 'leaves' ? 45 : 78}%,1)`;
+          actx.beginPath(); actx.ellipse(x, y, len, wid, t * m.spin + m.phase * 6, 0, 7); actx.fill();
+          break;
+        }
+        case 'sparks': { // a brief zig-zag flash now and then
+          const k = frac(t * 0.35 * m.speed + m.phase);
+          if (k > 0.08) break;
+          const seed = Math.floor(t * 0.35 * m.speed + m.phase) * 13.37 + m.x * 99;
+          actx.globalCompositeOperation = 'lighter';
+          actx.globalAlpha = Math.sin((k / 0.08) * Math.PI);
+          actx.strokeStyle = `hsla(${m.hue},100%,80%,1)`; actx.lineWidth = Math.max(1, u * 0.5);
+          actx.shadowColor = `hsla(${m.hue},100%,60%,1)`; actx.shadowBlur = u * 3;
+          let sx = bx + frac(Math.sin(seed) * 999) * bw, sy = by + frac(Math.sin(seed * 2) * 999) * bh;
+          actx.beginPath(); actx.moveTo(sx, sy);
+          for (let i = 1; i <= 5; i++) { sx += (frac(Math.sin(seed * i * 3) * 999) - 0.5) * u * 9; sy += u * 3 + frac(Math.sin(seed * i * 5) * 999) * u * 4; actx.lineTo(sx, sy); }
+          actx.stroke(); actx.shadowBlur = 0;
+          break;
+        }
+        case 'snow': // fall slowly, swaying
+          y = by + bh * (-0.05 + life * 1.1) + py; x += Math.sin(t * 0.8 * m.speed + m.phase * 9) * u * 3;
+          actx.globalCompositeOperation = 'source-over';
+          actx.globalAlpha = fade * (0.5 + m.depth * 0.5);
+          actx.drawImage(sprite(-1), x - r * 1.5, y - r * 1.5, r * 3, r * 3);
+          break;
+        case 'mist': { // big soft clouds sliding across
+          const big = Math.max(bw, bh) * (0.35 + m.size * 0.25);
+          x = bx - big + frac(m.x + t * 0.012 * m.speed) * (bw + big * 2) + px;
+          y = by + m.y * bh + Math.sin(t * 0.2 + m.phase * 9) * u * 4;
+          actx.globalCompositeOperation = 'screen';
+          actx.globalAlpha = 0.16;
+          actx.drawImage(sprite(m.hue, 80), x - big, y - big * 0.6, big * 2, big * 1.2);
+          break;
+        }
+        case 'stars': // twinkle in place
+          y = by + m.y * bh + py;
+          a = 0.15 + 0.85 * Math.max(0, Math.sin(t * 1.8 * m.speed + m.phase * 20)) ** 4;
+          actx.globalCompositeOperation = 'lighter';
+          actx.globalAlpha = a; actx.drawImage(sprite(m.hue, 80), x - r * 1.6, y - r * 1.6, r * 3.2, r * 3.2);
+          break;
+        default: // dust: motes of light floating every which way
+          x += Math.sin(t * 0.25 * m.speed + m.phase * 9) * u * 8;
+          y = by + m.y * bh + py + Math.cos(t * 0.2 * m.speed + m.phase * 7) * u * 6;
+          actx.globalCompositeOperation = 'lighter';
+          actx.globalAlpha = 0.25 + 0.5 * (0.5 + 0.5 * Math.sin(t * m.speed + m.phase * 20));
+          actx.drawImage(sprite(m.hue, 75), x - r * 1.5, y - r * 1.5, r * 3, r * 3);
+      }
+    }
+    actx.restore();
+  }
+
   // ---------- frame loop ----------
   function frame(now) {
     const t = now / 1000;
@@ -236,6 +398,10 @@
     s.setProperty('--px', cur.x.toFixed(3));
     s.setProperty('--py', cur.y.toFixed(3));
     drawSparkles(reduceMotion ? 1 : t);
+    drawAmbience(t);
+    // background inside the art window: drifts slowly and slides against the tilt
+    const dx = -cur.x * 1.4 + (reduceMotion ? 0 : Math.sin(t * 0.13) * 0.5), dy = -cur.y * 1.1 + (reduceMotion ? 0 : Math.cos(t * 0.11) * 0.4);
+    bg.firstElementChild.style.transform = `translate(${dx.toFixed(3)}%, ${dy.toFixed(3)}%) scale(1.07)`;
     requestAnimationFrame(frame);
   }
 

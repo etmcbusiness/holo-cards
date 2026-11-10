@@ -110,7 +110,7 @@ window.HoloProcess = (() => {
     // is checkerboard; a white claw or a black shadow is mostly one tone.
     const seen = new Uint8Array(N), minPocket = Math.max(300, N * 0.0008);
     for (let s = 0; s < N; s++) {
-      if (tones.length < 2 || !plain) break; // characters only: a card has no enclosed background
+      if (!tones.length || !plain) break; // characters only: a card has no enclosed background
       if (back[s] || seen[s] || !isBg(s)) continue;
       const pocket = [], st = [s];
       let hi = 0, lo = 0;
@@ -119,7 +119,8 @@ window.HoloProcess = (() => {
         if (seen[k] || back[k] || !isBg(k)) continue;
         seen[k] = 1; pocket.push(k);
         const L = (d[k * 4] + d[k * 4 + 1] + d[k * 4 + 2]) / 3;
-        if (Math.abs(L - tones[0]) < Math.abs(L - tones[1])) hi++; else lo++;
+        if (tones.length < 2) { if (Math.abs(L - tones[0]) < 7) hi++; } // flat background colour
+        else if (Math.abs(L - tones[0]) < Math.abs(L - tones[1])) hi++; else lo++;
         const i = k % W;
         if (i > 0) st.push(k - 1);
         if (i < W - 1) st.push(k + 1);
@@ -127,7 +128,9 @@ window.HoloProcess = (() => {
         if (k < N - W) st.push(k + W);
       }
       const n = pocket.length;
-      if (n >= minPocket && hi > n * 0.2 && lo > n * 0.2) for (const k of pocket) back[k] = 1;
+      // two-tone checkerboard pocket, or (plain background) a big flat patch of that exact colour
+      const trapped = tones.length > 1 ? hi > n * 0.2 && lo > n * 0.2 : hi > n * 0.85;
+      if (n >= minPocket && trapped) for (const k of pocket) back[k] = 1;
     }
 
     // keep the big pieces (body, a detached flame...), drop specks
@@ -293,14 +296,15 @@ window.HoloProcess = (() => {
   // `corners`: rough [x, y] corners on a 0-1000 scale (top-left, top-right, bottom-right,
   // bottom-left), e.g. from Gemini. Each side is snapped onto the strongest straight edge
   // near it, the sides are intersected for exact corners, and the card is warped flat.
-  function straighten(img, corners) {
+  // ratio: width / height of this kind of card (most are 63 x 88 mm; Yu-Gi-Oh is 59 x 86)
+  function straighten(img, corners, ratio = 63 / 88) {
     const src = fit(img, 1600), W = src.width, H = src.height;
     let quad = corners.map(([x, y]) => [(x / 1000) * W, (y / 1000) * H]);
     try { quad = snapQuad(src, quad); } catch (e) { console.warn('Edge snap failed, using rough corners', e); }
     // pull in a hair so no sliver of the table or screen shows along the edges
     const cx = quad.reduce((s, p) => s + p[0], 0) / 4, cy = quad.reduce((s, p) => s + p[1], 0) / 4;
     quad = quad.map(([x, y]) => [x + (cx - x) * 0.012, y + (cy - y) * 0.012]);
-    const outH = 1200, outW = Math.round(outH * (63 / 88)); // standard card proportions
+    const outH = 1200, outW = Math.round(outH * ratio);
     return warp(src, quad, outW, outH);
   }
 

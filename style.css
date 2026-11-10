@@ -178,8 +178,37 @@ body.editing .style-btn { display: none; }
   width: 100%; font: inherit; font-size: 16px; color: #eee; background: #1b1c22;
   border: 1px solid #444; border-radius: 12px; padding: 12px 13px; min-width: 0;
 }
-.editor .info #cardName, .editor .info #cardSet, .editor .info #cardEdition { grid-column: 1 / -1; }
+.editor .info #cardName, .editor .info #cardGame, .editor .info #cardSet, .editor .info #cardEdition { grid-column: 1 / -1; }
 .editor .info #cardName { font-size: 18px; font-weight: 600; }
 .caption { flex: none; text-align: center; padding: 0 16px 4px; min-height: 44px; }
 .caption b { display: block; font-size: 19px; }
 .caption span { display: block; font-size: 14px; color: #aab; margin-top: 2px; }
+
+/* foil and shine only where the card has foil (app.js sets --foil from the art window) */
+.holo, .glare { clip-path: var(--foil, none); }
+.card[data-holo="none"] .glare { clip-path: none; opacity: .45; } /* plain gloss */
+
+/* the background inside the art window, drifting behind the frame (app.js moves the inner layer) */
+.bg { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.bg i { position: absolute; inset: 0; background-size: 100% 100%; filter: saturate(1.1); will-change: transform; }
+.ambience { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+/* card value under the caption */
+.value-btn {
+  flex: none; align-self: center; margin-top: 2px;
+  font: inherit; font-size: 16px; font-weight: 600; color: #b9f5c8; background: #17301f;
+  border: 1px solid #2f8a4c; border-radius: 12px; padding: 7px 16px; cursor: pointer;
+}
+.value-btn.empty { color: #aab; background: #22232a; border-color: #444; }
+body.editing .value-btn { display: none; }
+.editor select, .editor .money input {
+  width: 100%; font: inherit; font-size: 16px; color: #eee; background: #1b1c22;
+  border: 1px solid #444; border-radius: 12px; padding: 12px 13px; min-width: 0;
+}
+.editor .money { display: flex; align-items: center; gap: 6px; font-size: 18px; font-weight: 600; color: #b9f5c8; }
+.editor .info .hint { grid-column: 1 / -1; }
+.sales { display: grid; gap: 6px; font-size: 15px; color: #dde; }
+.sales .big-price { font-size: 26px; font-weight: 700; color: #b9f5c8; }
+.sales ul { margin: 0; padding-left: 18px; color: #bbc; }
+.sales a { color: #8fb4ff; word-break: break-word; }
+.sales .err { color: #ff9a9a; }

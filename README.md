@@ -13,6 +13,12 @@ Tap **+ Add card**; the photo gallery opens. Pick either (photos can be at an an
 
 The character gets the puffed, banded 3D look and is placed so it breaks out of the frame; glitter is matched to the card (or turned off for non-holo cards). Drag or resize it if needed, then save. Cards added this way are kept in that browser only.
 
+Works for any trading card (Pokémon, Magic, Yu-Gi-Oh, One Piece, sports…). Gemini finds the art window, so full-art cards keep the whole character. Holo cards shine only in the art window, reverse holos everywhere except it. Each card gets a gentle background animation that suits its picture (embers, bubbles, leaves, snow…).
+
+## Value
+
+Tap the value under a card. A graded card (PSA, BGS, CGC…) is looked up at its grade; a raw card gets an estimated condition 1-10 from the photo and is looked up raw in that condition. Gemini searches recent sold listings and shows the last sale, recent sales and sources. Change the grade or type a value by hand any time. A new card is looked up automatically when it is saved.
+
 ## Adding a built-in card
 
 Put the processed images in `cards/` and add an entry to `cards.js` (the comments there explain each field). No build step; serve the folder with any static server, e.g. `npx http-server`.

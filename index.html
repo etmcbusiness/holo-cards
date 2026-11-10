@@ -19,6 +19,8 @@
     <div class="card" id="card">
       <div class="face">
         <img class="art" id="art" alt="">
+        <div class="bg" id="bg"><i></i></div>
+        <canvas class="ambience" id="ambience"></canvas>
         <div class="holo"></div>
         <canvas class="sparkles" id="sparkles"></canvas>
         <div class="glare"></div>
@@ -29,6 +31,7 @@
   </main>
 
   <div class="caption" id="caption"><b></b><span></span></div>
+  <button id="valueBtn" class="value-btn" hidden></button>
   <button id="styleBtn" class="style-btn">✨ Holo</button>
 
   <nav class="controls">
@@ -71,19 +74,50 @@
       <button class="big toggle" id="holoToggle" aria-pressed="true">✨ Holo (tap to change)</button>
       <div class="info">
         <input type="text" id="cardName" placeholder="Card name">
+        <input type="text" id="cardGame" placeholder="Game or sport (e.g. Pokémon, Baseball)">
         <input type="text" id="cardSet" placeholder="Set">
         <input type="text" id="cardYear" placeholder="Year" inputmode="numeric">
         <input type="text" id="cardNumber" placeholder="Number (e.g. 4/102)">
         <input type="text" id="cardEdition" placeholder="Edition (e.g. 1st Edition)">
+        <select id="cardGrader" aria-label="Graded by">
+          <option value="Raw">Raw (not graded)</option><option>PSA</option><option>BGS</option>
+          <option>CGC</option><option>SGC</option><option>TAG</option><option>Other</option>
+        </select>
+        <input type="text" id="cardGrade" placeholder="Grade 1-10" inputmode="decimal">
+        <p class="hint" id="condNote"></p>
       </div>
       <button class="big primary" id="savePlace">Save card</button>
+      <button class="big" id="redoBest">Not right? Redo with better AI</button>
       <button class="big" id="backPlace">Cancel</button>
+    </div>
+  </section>
+
+  <!-- what the card is worth (value.js) -->
+  <section class="editor" id="valuePanel" hidden>
+    <div class="step">
+      <h2 id="vTitle">Value</h2>
+      <p class="hint" id="vSub"></p>
+      <div class="info">
+        <select id="vGrader" aria-label="Graded by">
+          <option value="Raw">Raw (not graded)</option><option>PSA</option><option>BGS</option>
+          <option>CGC</option><option>SGC</option><option>TAG</option><option>Other</option>
+        </select>
+        <input type="text" id="vGrade" placeholder="Grade 1-10" inputmode="decimal">
+        <input type="text" id="vCert" placeholder="Cert number (optional)">
+        <label class="money">$ <input type="text" id="vPrice" placeholder="Value" inputmode="decimal"></label>
+      </div>
+      <p class="hint" id="vCond"></p>
+      <button class="big primary" id="vLookup">Look up last sold</button>
+      <div class="sales" id="vResult"></div>
+      <p class="hint" id="vTotal"></p>
+      <button class="big" id="vClose">Done</button>
     </div>
   </section>
 
   <script src="cards.js"></script>
   <script src="process.js"></script>
   <script src="ai.js"></script>
+  <script src="value.js"></script>
   <script src="app.js"></script>
   <script src="editor.js"></script>
 </body>

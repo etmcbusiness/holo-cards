@@ -74,14 +74,14 @@ body {
 .pop.on { display: block; }
 .pop .float { position: absolute; }
 .pop.bob .float { animation: bob 3.4s ease-in-out infinite; }
-/* red/cyan fringe that widens as the card tilts, plus a shadow onto the card */
-.pop img {
-  display: block; width: 100%; height: 100%;
-  filter:
-    drop-shadow(calc(-1px - var(--px) * 3px) 0 0 rgba(255,0,60,.55))
-    drop-shadow(calc(1px + var(--px) * 3px) 0 0 rgba(0,220,255,.55))
-    drop-shadow(calc(var(--px) * -10px + 4px) calc(var(--py) * -10px + 10px) 7px rgba(0,0,0,.5));
+.pop img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+#popImg {
+  filter: drop-shadow(calc(var(--px) * -10px + 4px) calc(var(--py) * -10px + 10px) 7px rgba(0,0,0,.5));
 }
+/* echo copies of the character in its own colours, spreading apart as the card tilts */
+.pop .ghost { opacity: .5; }
+.pop .g1 { transform: translate(calc(-1px - var(--px) * 3px), calc(var(--py) * -1px)); filter: brightness(1.25); }
+.pop .g2 { transform: translate(calc(1px + var(--px) * 3px), calc(var(--py) * 1px)); filter: brightness(.75); }
 /* stripes only where the character is */
 .pop .stripes {
   -webkit-mask: var(--pop-src) center / 100% 100% no-repeat;

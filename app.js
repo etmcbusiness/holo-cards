@@ -41,6 +41,7 @@
     });
     if (popImg.getAttribute('src') !== c.pop.src) {
       popImg.src = c.pop.src;
+      pop.querySelectorAll('.ghost').forEach((g) => { g.src = c.pop.src; });
       pop.style.setProperty('--pop-src', `url("${c.pop.src}")`);
     }
     pop.classList.toggle('bob', !!c.pop.float);

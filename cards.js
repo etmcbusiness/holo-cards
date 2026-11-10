@@ -1,28 +1,17 @@
 // Your cards. Add one entry per card and drop its images in cards/.
 //
-//   name     shown in the title bar as "<name>.exe"
-//   color    title-bar colour (the card's type colour)
-//   icon     small emoji in the title-bar corner
-//   art      the card scan or art (any aspect ratio). For the pop-out,
-//            use a version with the character removed.
-//   rounded  true if the art is a whole card scan (rounds its corners)
-//   caption  flavour text along the bottom
-//   pop      optional: the character cut out on a transparent PNG, floating
-//            in front of the card.
-//              box    [left, top, width, height] in % of the art; may go
-//                     below 0 or past 100 to stick out of the window
-//              cut    hide the cut-out below this line (% of the art height),
-//                     e.g. the bottom of the art box, so it climbs out of it
-//              float  true makes it bob gently on its own
-//   rays     optional: true adds a slowly turning sunburst behind the art
+//   name   used for the page title and alt text
+//   art    the card scan with the character removed (any size)
+//   pop    the character cut out on a transparent PNG, floating in front
+//            box    [left, top, width, height] in % of the card; may go
+//                   below 0 or past 100 to stick out past the edge
+//            cut    hide the cut-out below this line (% of the card height),
+//                   e.g. the bottom of the art box, so it climbs out of it
+//            float  true makes it bob gently on its own
 window.CARDS = [
   {
-    name: 'charizard',
-    color: '#d8322b',
-    icon: '🔥',
+    name: 'Crystal Charizard',
     art: 'cards/crystal-charizard.jpg',
-    rounded: true,
-    caption: 'crystal type · skyridge 146/144',
     pop: { src: 'cards/crystal-charizard-pop.png', box: [1, 4.4, 93.7, 68.3], cut: 48.5, float: true },
   },
 ];

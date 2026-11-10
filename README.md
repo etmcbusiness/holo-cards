@@ -1,6 +1,6 @@
 # Holo Cards
 
-My collectible cards shown as retro `.exe` windows: CRT stripes, holo foil, twinkling sparkles, a tilt that follows your mouse or phone, and the character popping out of the frame.
+My collectible cards with a 3D lenticular feel: tilt with your mouse or phone and the stripes slide, the colours split, the foil and sparkles shimmer, and the character floats out of the card in front of it.
 
 Live page: https://etmcbusiness.github.io/holo-cards/
 

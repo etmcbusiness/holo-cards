@@ -12,16 +12,10 @@
     const c = cards[index];
     card.classList.add('swap');
     setTimeout(() => {
-      card.style.setProperty('--c', c.color);
-      $('icon').textContent = c.icon || '';
-      $('title').textContent = `${c.name}.exe`;
-      $('caption').textContent = c.caption || '';
-      card.classList.toggle('rays', !!c.rays);
-      card.classList.toggle('rounded', !!c.rounded);
       pop.classList.remove('on');
       art.alt = c.name;
       art.src = c.art;
-      document.title = `${c.name}.exe`;
+      document.title = c.name;
       [...$('dots').children].forEach((d, n) => d.classList.toggle('on', n === index));
     }, 200);
   }
@@ -41,8 +35,11 @@
       width: `${(w / 100) * W}px`, height: `${(h / 100) * H}px`,
       clipPath: `polygon(-100% -100%, 200% -100%, 200% ${cut}%, -100% ${cut}%)`,
     });
-    if (popImg.getAttribute('src') !== c.pop.src) popImg.src = c.pop.src;
-    pop.classList.toggle('float', !!c.pop.float);
+    if (popImg.getAttribute('src') !== c.pop.src) {
+      popImg.src = c.pop.src;
+      pop.style.setProperty('--pop-src', `url("${c.pop.src}")`);
+    }
+    pop.classList.toggle('bob', !!c.pop.float);
     pop.classList.add('on');
   }
 
@@ -153,6 +150,16 @@
     }
   }
 
+  // ---------- red/cyan split that widens with the tilt (the "3D fuzz") ----------
+  const offsets = (id) => [...document.querySelectorAll(`#${id} feOffset`)];
+  const splitArt = offsets('splitArt'), splitPop = offsets('splitPop');
+  function split([r, gb], strength) {
+    const dx = 0.6 + Math.abs(cur.x) * strength, dy = cur.y * strength * 0.4;
+    const sx = cur.x < 0 ? -1 : 1;
+    r.setAttribute('dx', (-dx * sx).toFixed(2)); r.setAttribute('dy', (-dy).toFixed(2));
+    gb.setAttribute('dx', (dx * sx).toFixed(2)); gb.setAttribute('dy', dy.toFixed(2));
+  }
+
   // ---------- frame loop ----------
   function frame(now) {
     const t = now / 1000;
@@ -167,6 +174,8 @@
     s.setProperty('--ty', `${-cur.y * MAX}deg`);
     s.setProperty('--px', cur.x.toFixed(3));
     s.setProperty('--py', cur.y.toFixed(3));
+    split(splitArt, 1.4);
+    split(splitPop, 2.8);
     drawSparkles(reduceMotion ? 1 : t);
     requestAnimationFrame(frame);
   }

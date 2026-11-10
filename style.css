@@ -3,7 +3,7 @@ html, body { margin: 0; height: 100%; }
 body {
   background: radial-gradient(ellipse at 50% 40%, #23242b 0%, #0c0c10 75%);
   color: #eee;
-  font-family: Tahoma, "MS Sans Serif", Verdana, sans-serif;
+  font-family: system-ui, sans-serif;
   overflow: hidden;
   touch-action: none;
   -webkit-user-select: none;
@@ -14,84 +14,31 @@ body {
   height: calc(100svh - 70px);
   display: grid;
   place-items: center;
-  perspective: 1100px;
+  perspective: 900px;
 }
 
-/* --tx/--ty: tilt in degrees; --px/--py: pointer -1..1 (set by app.js) */
+/* --tx/--ty: tilt in degrees; --px/--py: tilt -1..1 (set by app.js) */
 .card {
-  --c: #d8322b;
   --tx: 0deg; --ty: 0deg; --px: 0; --py: 0;
   position: relative;
-  width: min(84vw, 400px, calc((100svh - 170px) * 0.66));
+  width: min(80vw, 420px, calc((100svh - 130px) * 0.72));
   transform: rotateX(var(--ty)) rotateY(var(--tx));
   transform-style: preserve-3d;
   transition: opacity .25s;
 }
 .card.swap { opacity: 0; }
 
-.window {
-  position: relative;
-  padding: 4px 4px 6px;
-  background: color-mix(in srgb, var(--c) 18%, #f3efe8);
-  box-shadow:
-    inset -2px -2px #1a1a1a, inset 2px 2px #fff,
-    inset -4px -4px #8a8a8a, inset 4px 4px #e4e0da,
-    0 30px 60px -20px rgba(0,0,0,.8);
-}
-
-.titlebar {
-  display: flex; align-items: center; gap: 6px;
-  height: 2.1em; padding: 0 3px 0 4px;
-  background: linear-gradient(90deg, var(--c), color-mix(in srgb, var(--c) 45%, #fff));
-  color: #fff; font-weight: bold;
-}
-.icon {
-  width: 1.6em; height: 1.6em; display: grid; place-items: center;
-  font-size: .8em; background: #e8e4dc;
-  box-shadow: inset -1px -1px #333, inset 1px 1px #fff;
-}
-.title {
-  flex: 1; text-align: center; letter-spacing: .02em;
-  text-shadow: -1px 0 rgba(255,0,60,.7), 1px 0 rgba(0,220,255,.7), 0 1px 1px rgba(0,0,0,.4);
-}
-.btns { display: flex; gap: 2px; }
-.btns b {
-  width: 1.5em; height: 1.35em; display: grid; place-items: center;
-  font-size: .8em; color: #111; background: #e8e4dc;
-  box-shadow: inset -1px -1px #222, inset 1px 1px #fff, inset -2px -2px #888;
-}
-.btns b.x { background: #e0281f; color: #fff; }
-
-.menubar {
-  padding: .35em .5em; font-size: .85em; color: #222;
-  word-spacing: 1.2em;
-  text-shadow: -1px 0 rgba(255,0,60,.35), 1px 0 rgba(0,200,255,.35);
-}
-.menubar u { text-decoration: none; }
-
-.viewport {
+.face {
   position: relative; overflow: hidden;
+  border-radius: 4.6% / 3.4%;
   isolation: isolate; /* blend modes below don't apply inside the 3D card without this */
-  box-shadow: inset 2px 2px #6a6a6a, inset -2px -2px #fff;
-  padding: 2px;
-  background: #000;
+  box-shadow: 0 30px 60px -20px rgba(0,0,0,.85);
 }
-.art { display: block; width: 100%; filter: url(#fringe) saturate(1.15) contrast(1.05); }
+.art { display: block; width: 100%; filter: url(#splitArt) saturate(1.1); }
 
-.rays {
-  display: none;
-  position: absolute; inset: -50%;
-  background: repeating-conic-gradient(from 0deg at 50% 50%, rgba(60,20,0,.22) 0 9deg, transparent 9deg 18deg);
-  mix-blend-mode: multiply;
-  animation: spin 60s linear infinite;
-  z-index: 1;
-}
-.card.rays .rays { display: block; }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* rainbow foil that slides as the card tilts */
+/* rainbow foil band that slides as the card tilts */
 .holo {
-  position: absolute; inset: 0; z-index: 2;
+  position: absolute; inset: 0;
   background: linear-gradient(115deg,
     transparent 40%, #ff4fd0 44%, #ffe94f 47%, #4fff9a 50%, #4fc3ff 53%, #a84fff 56%, transparent 60%);
   background-size: 250% 250%;
@@ -99,58 +46,54 @@ body {
   mix-blend-mode: soft-light;
   opacity: .7;
 }
-.sparkles { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; }
+.sparkles { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .glare {
-  position: absolute; inset: 0; z-index: 4;
+  position: absolute; inset: 0;
   background: radial-gradient(circle at calc(50% + var(--px) * 45%) calc(45% + var(--py) * 45%),
     rgba(255,255,255,.35), rgba(255,255,255,0) 50%);
   mix-blend-mode: overlay;
 }
 
-.caption {
-  margin-top: 5px; padding: .35em .5em;
-  font-size: .82em; color: #222; background: #fbf9f5;
-  box-shadow: inset 1px 1px #777, inset -1px -1px #fff;
-  text-shadow: -1px 0 rgba(255,0,60,.35), 1px 0 rgba(0,200,255,.35);
-}
-
-/* fine vertical RGB stripes over everything, like a CRT up close */
+/* fine vertical RGB stripes, like a lenticular print; they slide as the card tilts */
 .stripes {
-  position: absolute; inset: 0; z-index: 5; pointer-events: none;
+  position: absolute; inset: 0; pointer-events: none;
   background: repeating-linear-gradient(90deg,
-    rgba(255,0,40,.06) 0 1px, rgba(0,255,80,.05) 1px 2px, rgba(0,60,255,.06) 2px 3px, rgba(0,0,0,.26) 3px 4px);
+    rgba(255,0,40,.07) 0 1px, rgba(0,255,80,.06) 1px 2px, rgba(0,60,255,.07) 2px 3px, rgba(0,0,0,.28) 3px 4px);
+  background-position: calc(var(--px) * 9px) 0;
 }
 
-/* the cut-out that breaks out of the frame */
+/* the character, floating in front of the card */
 .pop {
   position: absolute; display: none; pointer-events: none;
-  transform: translateZ(35px);
+  transform: translateZ(70px);
 }
 .pop.on { display: block; }
+.pop .float { position: relative; width: 100%; height: 100%; }
+.pop.bob .float { animation: bob 3.4s ease-in-out infinite; }
 .pop img {
   display: block; width: 100%; height: 100%;
-  filter: drop-shadow(5px 9px 6px rgba(0,0,0,.5)) url(#fringe);
+  filter: url(#splitPop) drop-shadow(calc(var(--px) * -10px + 4px) calc(var(--py) * -10px + 10px) 7px rgba(0,0,0,.55));
 }
-.pop.float img { animation: bob 3.4s ease-in-out infinite; }
+/* stripes only where the character is */
+.pop .stripes {
+  -webkit-mask: var(--pop-src) center / 100% 100% no-repeat;
+          mask: var(--pop-src) center / 100% 100% no-repeat;
+}
 @keyframes bob { 50% { transform: translateY(-2%) rotate(-.8deg); } }
-
-.card.rounded .art { border-radius: 4.6% / 3.4%; }
 
 .controls {
   height: 70px; display: flex; align-items: center; justify-content: center; gap: 18px;
   padding-bottom: env(safe-area-inset-bottom);
 }
 .controls button, .motion {
-  font: inherit; font-size: 15px; color: #111; background: #e8e4dc; border: 0;
-  padding: 8px 14px; cursor: pointer;
-  box-shadow: inset -2px -2px #222, inset 2px 2px #fff, inset -3px -3px #888;
+  font: inherit; font-size: 15px; color: #eee; background: #2a2b33; border: 1px solid #444;
+  border-radius: 8px; padding: 8px 14px; cursor: pointer;
 }
-.controls button:active, .motion:active { box-shadow: inset 2px 2px #222, inset -2px -2px #fff; }
 .dots { display: flex; gap: 8px; }
 .dots i { width: 8px; height: 8px; border-radius: 50%; background: #555; }
 .dots i.on { background: #eee; }
 .motion { position: fixed; top: calc(12px + env(safe-area-inset-top)); right: 12px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .rays, .pop.float img { animation: none; }
+  .pop.bob .float { animation: none; }
 }

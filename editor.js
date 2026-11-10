@@ -142,10 +142,20 @@
         const ok = Array.isArray(info?.corners) && info.corners.length === 4 && info.corners.every((p) => p?.length === 2);
         const ratio = /yu-?gi-?oh/i.test(info?.game || '') ? 59 / 86 : 63 / 88;
         const card = ok ? P.straighten(img, info.corners, ratio) : P.cropCard(img);
-        const layout = inspect(card); // runs while Gemini separates the character
-        const sep = await fromPhoto(card);
-        await say('Adding the 3D shading…');
-        made = fromSplit(sep, card, await layout);
+        // Gemini outlines the character; it's cut from the card's own pixels (nothing redrawn)
+        await say('Finding the character…');
+        const [layout, mask] = await Promise.all([
+          inspect(card),
+          AI.segment(card).catch((e) => { console.warn('Could not outline the character:', e); return null; }),
+        ]);
+        if (mask) {
+          await say('Adding the 3D shading…');
+          made = fromMask(card, mask, layout);
+        } else { // no outline: fall back to Gemini repainting the card
+          const sep = await fromPhoto(card);
+          await say('Adding the 3D shading…');
+          made = fromSplit(sep, card, layout);
+        }
         showPlace();
       }
       if (info && made) {
@@ -213,6 +223,22 @@
     return {
       card, char: P.stylize(split.char), pos, win, hues: glitter.hues,
       ambience: layout?.ambience || null, photoCard: ref, layout,
+    };
+  }
+
+  // The character cut from the card itself by Gemini's mask, sitting exactly where it was (a
+  // touch bigger so it covers its own outline); the hole behind it filled in.
+  function fromMask(card, mask, layout) {
+    const char = P.maskCut(card, mask), o = char.offset;
+    const w = layout?.win ? { l: layout.win.l / 100, t: layout.win.t / 100, r: layout.win.r / 100, b: layout.win.b / 100 } : P.findWindow(card);
+    const w0 = (char.width / card.width) * 100, h0 = (char.height / card.height) * 100, w1 = w0 * 1.03;
+    const cx = (o.x / card.width) * 100 + w0 / 2, cy = (o.y / card.height) * 100 + h0 / 2;
+    const glitter = P.glitterFor(card, w);
+    setHolo(glitter.kind);
+    return {
+      card: P.inpaint(card, mask), char: P.stylize(char), win: pct(w), hues: glitter.hues,
+      pos: { w: w1, l: cx - w1 / 2, t: cy - (h0 * 1.03) / 2 },
+      ambience: layout?.ambience || null, photoCard: card, layout,
     };
   }
 

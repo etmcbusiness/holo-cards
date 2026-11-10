@@ -8,7 +8,7 @@ Live page: https://etmcbusiness.github.io/holo-cards/
 
 Tap **+ Add card**; the photo gallery opens. Pick either (photos can be at an angle on a table, or screenshots; the card is found, straightened and cropped automatically):
 
-- **a plain photo or scan of the card.** Google Gemini (your own API key, asked for once and kept only on that device) paints the character out of the card and isolates it in place. A few cents per card.
+- **a plain photo or scan of the card.** Google Gemini (your own API key, asked for once and kept only on that device) outlines the character; it is cut from the card's own pixels (nothing is redrawn) and the space behind it is filled in on the phone. If that fails, Gemini repaints the card instead. About a cent per card.
 - **one image with the card (character removed) and the cut-out side by side,** on a checkerboard or plain background. No AI needed.
 
 The character gets the puffed, banded 3D look and is placed so it breaks out of the frame; glitter is matched to the card (or turned off for non-holo cards). Drag or resize it if needed, then save. Cards added this way are kept in that browser only.

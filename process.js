@@ -573,5 +573,79 @@ window.HoloProcess = (() => {
     return { l: l / W, t: t / H, r: r / W, b: b / H };
   }
 
-  return { loadImage, fit, cutout, cropCard, straighten, splitLayered, locate, findWindow, glitterFor, stylize, fadeBottom, toBlob };
+  // The character out of the card using a mask (a card-sized canvas whose alpha is the mask):
+  // the card's own pixels, trimmed, with .offset = where it sat on the card.
+  function maskCut(card, mask) {
+    const c = canvasOf(card.width, card.height), x = c.getContext('2d', { willReadFrequently: true });
+    x.drawImage(card, 0, 0);
+    x.globalCompositeOperation = 'destination-in';
+    x.drawImage(mask, 0, 0);
+    return trim(c);
+  }
+
+  // The card with the masked character filled in from the colours around it, so something
+  // sensible shows behind the character as the card tilts. The fill grows inward from the
+  // hole's edge (each pixel the average of its filled neighbours), then gets softened.
+  function inpaint(card, mask) {
+    const W = card.width, H = card.height, s = Math.min(1, 360 / Math.max(W, H));
+    const w = Math.max(1, Math.round(W * s)), h = Math.max(1, Math.round(H * s)), N = w * h;
+    const sc = scaled(card, w), sd = pixels(sc);
+    const mc = canvasOf(w, h);
+    mc.getContext('2d', { willReadFrequently: true }).drawImage(mask, 0, 0, w, h);
+    const md = pixels(mc);
+    let hole = new Uint8Array(N);
+    for (let k = 0; k < N; k++) hole[k] = md[k * 4 + 3] > 30 ? 1 : 0;
+    for (let r = 0; r < 2; r++) { // grow the hole 2px so no outline of the character is left
+      const g = hole.slice();
+      for (let k = 0; k < N; k++) if (hole[k]) {
+        const i = k % w;
+        if (i > 0) g[k - 1] = 1; if (i < w - 1) g[k + 1] = 1; if (k >= w) g[k - w] = 1; if (k < N - w) g[k + w] = 1;
+      }
+      hole = g;
+    }
+    const col = new Float32Array(N * 3), known = new Uint8Array(N);
+    for (let k = 0; k < N; k++) if (!hole[k]) { known[k] = 1; col[k * 3] = sd[k * 4]; col[k * 3 + 1] = sd[k * 4 + 1]; col[k * 3 + 2] = sd[k * 4 + 2]; }
+    for (let pass = 0; pass < w + h; pass++) {
+      const add = [];
+      for (let k = 0; k < N; k++) {
+        if (known[k]) continue;
+        const i = k % w, y = (k / w) | 0;
+        let r = 0, g = 0, b = 0, n = 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const X = i + dx, Y = y + dy;
+          if ((!dx && !dy) || X < 0 || Y < 0 || X >= w || Y >= h) continue;
+          const q = Y * w + X;
+          if (known[q]) { r += col[q * 3]; g += col[q * 3 + 1]; b += col[q * 3 + 2]; n++; }
+        }
+        if (n) add.push(k, r / n, g / n, b / n);
+      }
+      if (!add.length) break;
+      for (let j = 0; j < add.length; j += 4) { const k = add[j]; col[k * 3] = add[j + 1]; col[k * 3 + 1] = add[j + 2]; col[k * 3 + 2] = add[j + 3]; known[k] = 1; }
+    }
+    // soften the streaks the inward growth leaves (only inside the hole)
+    for (let it = 0; it < 4; it++) {
+      const c2 = col.slice();
+      for (let k = 0; k < N; k++) {
+        if (!hole[k]) continue;
+        const i = k % w;
+        const nb = [k, i > 0 ? k - 1 : k, i < w - 1 ? k + 1 : k, k >= w ? k - w : k, k < N - w ? k + w : k];
+        for (let ch = 0; ch < 3; ch++) c2[k * 3 + ch] = nb.reduce((a, q) => a + col[q * 3 + ch], 0) / 5;
+      }
+      col.set(c2);
+    }
+    // the fill, only where the hole is (soft-edged once scaled up)
+    const fill = canvasOf(w, h), fx = fill.getContext('2d', { willReadFrequently: true }), fd = fx.createImageData(w, h);
+    for (let k = 0; k < N; k++) {
+      fd.data[k * 4] = col[k * 3]; fd.data[k * 4 + 1] = col[k * 3 + 1]; fd.data[k * 4 + 2] = col[k * 3 + 2];
+      fd.data[k * 4 + 3] = hole[k] ? 255 : 0;
+    }
+    fx.putImageData(fd, 0, 0);
+    const out = canvasOf(W, H), ox = out.getContext('2d', { willReadFrequently: true });
+    ox.drawImage(card, 0, 0);
+    ox.imageSmoothingQuality = 'high';
+    ox.drawImage(fill, 0, 0, W, H);
+    return out;
+  }
+
+  return { maskCut, inpaint, loadImage, fit, cutout, cropCard, straighten, splitLayered, locate, findWindow, glitterFor, stylize, fadeBottom, toBlob };
 })();

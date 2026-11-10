@@ -6,6 +6,8 @@
 //                     read from the photo (one cheap text call)
 //   inspect(flatCard) -> { win, char, ambience }: where the art window and the character are
 //                     (one cheap text call on the straightened card)
+//   segment(flatCard) -> a mask of exactly which pixels are the character (no image is redrawn,
+//                     so the cut-out is the card's own pixels)
 //   value(details)  -> recent sold prices for that card at that grade (text call with Google Search)
 window.HoloAI = (() => {
   const KEY = 'holo-gemini-key';
@@ -15,6 +17,11 @@ window.HoloAI = (() => {
     best: ['gemini-nano-banana-2.1', 'gemini-3.1-flash-image', 'gemini-3-pro-image'], // for retries: costs more
   };
   const TEXT_MODELS = ['gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemini-2.5-flash'];
+  // looking closely (art window, character outline): the Flash models, which are trained for
+  // boxes and masks; Lite misjudged where the art window is
+  const VISION_MODELS = ['gemini-3.8-flash', 'gemini-3.1-flash', 'gemini-2.5-flash'];
+  // thinking off gives better boxes and masks (2.5 and 3.x spell it differently)
+  const noThinking = (m) => (m.startsWith('gemini-2.5') ? { thinkingBudget: 0 } : { thinkingLevel: 'minimal' });
   const URL = (m) => `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`;
 
   const getKey = () => { try { return localStorage.getItem(KEY) || ''; } catch { return ''; } };
@@ -23,13 +30,14 @@ window.HoloAI = (() => {
   class KeyError extends Error {}
 
   // POST to the first model that works; returns the first candidate as { parts, grounding }
+  // body: the request, or (model) => request when it differs per model
   async function call(models, body) {
     let lastErr = null;
     for (const model of models) {
       const r = await fetch(URL(model), {
         method: 'POST',
         headers: { 'x-goog-api-key': getKey(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(typeof body === 'function' ? body(model) : body),
       });
       if (r.status === 404) { lastErr = new Error(`${model} not available`); continue; }
       const json = await r.json().catch(() => ({}));
@@ -131,9 +139,10 @@ window.HoloAI = (() => {
     'stars (space, night, psychic, magic), dust (anything else: floating motes of light).';
   async function inspect(card) {
     const box = { type: 'ARRAY', items: { type: 'NUMBER' } };
-    const { parts } = await call(TEXT_MODELS, {
+    const { parts } = await call(VISION_MODELS, (m) => ({
       contents: [{ parts: [{ text: INSPECT }, jpeg(card)] }],
       generationConfig: {
+        thinkingConfig: noThinking(m),
         responseMimeType: 'application/json',
         responseSchema: {
           type: 'OBJECT',
@@ -141,15 +150,69 @@ window.HoloAI = (() => {
           required: ['art', 'full_art', 'character', 'ambience'],
         },
       },
-    });
+    }));
     const r = json(parts);
     if (!r) return null;
     // -> { l, t, r, b } in % of the card
     const pct = (b) => (Array.isArray(b) && b.length === 4 && b[2] > b[0] && b[3] > b[1]
       ? { t: b[0] / 10, l: b[1] / 10, b: b[2] / 10, r: b[3] / 10 } : null);
+    // full art only when the picture box really covers the card (the flag alone has been wrong)
     let win = pct(r.art);
-    if (r.full_art || (win && win.b - win.t > 80)) win = { l: 0, t: 0, r: 100, b: 100 };
+    if (win && win.b - win.t > (r.full_art ? 65 : 85)) win = { l: 0, t: 0, r: 100, b: 100 };
     return { win, char: pct(r.character), ambience: AMBIENCE.includes(r.ambience) ? r.ambience : null };
+  }
+
+  // Exactly which pixels are the character: Gemini's segmentation mask, drawn into a canvas the
+  // size of the card whose alpha is the mask. null if it found nothing.
+  const SEGMENT = 'Give the segmentation mask for the main character in this trading card\'s picture: the creature or person, ' +
+    'including its wings, tail, hair and any fire, breath or effects coming from it. Not the card frame, text, symbols or the picture background. ' +
+    'Output a JSON list of segmentation masks where each entry contains the 2D bounding box in the key "box_2d", ' +
+    'the segmentation mask in key "mask", and the text label in the key "label".';
+  async function segment(card) {
+    const { parts } = await call(VISION_MODELS, (m) => ({
+      contents: [{ parts: [{ text: SEGMENT }, jpeg(card)] }],
+      generationConfig: { thinkingConfig: noThinking(m), responseMimeType: 'application/json' },
+    }));
+    const text = parts.map((p) => p.text || '').join('');
+    let list;
+    try { list = JSON.parse(text.replace(/^```(json)?|```$/g, '')); } catch { const m = text.match(/\[[\s\S]*\]/); try { list = m && JSON.parse(m[0]); } catch {} }
+    if (!Array.isArray(list)) list = list ? [list] : [];
+    const W = card.width, H = card.height;
+    const out = Object.assign(document.createElement('canvas'), { width: W, height: H });
+    const o = out.getContext('2d', { willReadFrequently: true });
+    let drew = false;
+    for (const e of list) {
+      const b = e?.box_2d;
+      if (!Array.isArray(b) || b.length !== 4) continue;
+      const x0 = (b[1] / 1000) * W, y0 = (b[0] / 1000) * H, bw = ((b[3] - b[1]) / 1000) * W, bh = ((b[2] - b[0]) / 1000) * H;
+      if (bw < 4 || bh < 4) continue;
+      if (typeof e.mask === 'string' && e.mask.length > 50) {
+        // a probability map (0-255) the size of the box, as a PNG
+        const src = e.mask.startsWith('data:') ? e.mask : `data:image/png;base64,${e.mask}`;
+        const im = await toCanvas(src).catch(() => null);
+        if (!im) continue;
+        const t = Object.assign(document.createElement('canvas'), { width: Math.round(bw), height: Math.round(bh) });
+        const tx = t.getContext('2d', { willReadFrequently: true });
+        tx.drawImage(im, 0, 0, t.width, t.height);
+        const id = tx.getImageData(0, 0, t.width, t.height), d = id.data;
+        for (let k = 0; k < d.length; k += 4) {
+          const p = Math.max(d[k], d[k + 1], d[k + 2]) * (d[k + 3] / 255);
+          d[k] = d[k + 1] = d[k + 2] = 255;
+          d[k + 3] = Math.max(0, Math.min(255, (p - 110) * 4)); // crisp edge from the probability
+        }
+        tx.putImageData(id, 0, 0);
+        o.drawImage(t, x0, y0);
+        drew = true;
+      } else if (Array.isArray(e.mask) && e.mask.length > 2) {
+        // a polygon of [x, y] on 0-1000 over the whole image
+        o.fillStyle = '#fff';
+        o.beginPath();
+        e.mask.forEach(([x, y], i) => (i ? o.lineTo : o.moveTo).call(o, (x / 1000) * W, (y / 1000) * H));
+        o.fill();
+        drew = true;
+      }
+    }
+    return drew ? out : null;
   }
 
   // What has this card sold for lately, at this grade? Gemini searches the web (sold listings,
@@ -187,5 +250,5 @@ window.HoloAI = (() => {
     };
   }
 
-  return { getKey, setKey, layered, identify, inspect, value, KeyError };
+  return { getKey, setKey, layered, identify, inspect, segment, value, KeyError };
 })();

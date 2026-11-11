@@ -421,3 +421,12 @@ body.editing .grid-btn, body.editing .bulk-pill, body.empty .grid-btn { display:
   padding: 18px 16px 0; border-radius: 22px 22px 0 0; background: #17181e; border-top: 1px solid rgba(255,255,255,.1);
   animation: rise .25s ease;
 }
+
+/* draw around the character */
+.outline { position: relative; justify-self: center; touch-action: none; user-select: none; }
+.outline canvas#olCanvas { display: block; width: 100%; border-radius: 8px; touch-action: none; cursor: crosshair; }
+.outline .loupe {
+  position: absolute; z-index: 3; width: 120px; height: 120px; border-radius: 50%; pointer-events: none;
+  border: 3px solid #fff; box-shadow: 0 6px 18px rgba(0,0,0,.7); background: #000;
+}
+.ol-tools { display: flex; justify-content: center; gap: 24px; }

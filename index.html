@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Holo Cards">
   <meta name="theme-color" content="#0c0c10">
-  <link rel="stylesheet" href="style.css?v=202611110224">
+  <link rel="stylesheet" href="style.css?v=202611110237">
 </head>
 <body>
   <main class="stage" id="stage">
@@ -64,6 +64,7 @@
       <input type="password" id="keyInput" placeholder="2. Paste your Gemini API key" autocomplete="off">
       <p class="status" id="keyMsg"></p>
       <button class="big primary" id="keySave">Save key and continue</button>
+      <button class="big" id="keyFree">Skip: I'll outline the character myself (free)</button>
       <button class="big" id="keyCancel">Cancel</button>
     </div>
     <div class="step" id="stepCrop" hidden>
@@ -80,10 +81,27 @@
       </div>
       <button class="text-btn" id="cropStop" hidden>Stop here and add the ones checked so far</button>
     </div>
+    <div class="step" id="stepOutline" hidden>
+      <h2 class="center">Draw around the character</h2>
+      <p class="hint center">Trace close to its edge with your finger. Draw more shapes for separate parts, like a flame. Everything inside gets cut out.</p>
+      <div class="outline" id="outline">
+        <canvas id="olCanvas"></canvas>
+        <canvas class="loupe" id="olLoupe" width="240" height="240" hidden></canvas>
+      </div>
+      <div class="ol-tools">
+        <button class="text-btn" id="olUndo">Undo</button>
+        <button class="text-btn" id="olClear">Clear</button>
+      </div>
+      <div class="actions">
+        <button class="big" id="olCancel">Cancel</button>
+        <button class="big primary" id="olDone">Cut it out</button>
+      </div>
+    </div>
     <div class="step" id="stepWork">
       <div class="spinner" id="spinner"></div>
       <p class="status big" id="pickStatus"></p>
-      <button class="big primary" id="retryPick" hidden>Choose another photo</button>
+      <button class="big primary" id="freeOutline" hidden>Outline the character myself (free)</button>
+      <button class="big" id="retryPick" hidden>Choose another photo</button>
       <button class="big" id="cancelPick">Cancel</button>
     </div>
 
@@ -124,6 +142,7 @@
         <label class="field"><span>Grade</span><input type="text" id="cardGrade" placeholder="1-10" inputmode="decimal"></label>
         <p class="hint wide" id="condNote"></p>
       </div>
+      <button class="text-btn" id="drawOutline" hidden>Draw the character's outline myself (free)</button>
       <button class="text-btn" id="recrop" hidden>Re-crop the card from the original photo</button>
       <button class="text-btn" id="redoBest">Character not right? Try Gemini’s repaint instead</button>
 
@@ -226,7 +245,7 @@
   <!-- newest version: this page may be cached for ~10 min, so check version.txt and reload -->
   <script id="build">
     (function () {
-      var BUILD = '202611110224';
+      var BUILD = '202611110237';
       fetch('version.txt?' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (v) {
         v = (v || '').trim();
         if (v && v !== BUILD && sessionStorage.getItem('holo-reloaded') !== v) {
@@ -236,13 +255,13 @@
       }).catch(function () {});
     })();
   </script>
-  <script src="cards.js?v=202611110224"></script>
-  <script src="process.js?v=202611110224"></script>
-  <script src="ai.js?v=202611110224"></script>
-  <script src="value.js?v=202611110224"></script>
-  <script src="app.js?v=202611110224"></script>
-  <script src="editor.js?v=202611110224"></script>
-  <script src="bulk.js?v=202611110224"></script>
-  <script src="collection.js?v=202611110224"></script>
+  <script src="cards.js?v=202611110237"></script>
+  <script src="process.js?v=202611110237"></script>
+  <script src="ai.js?v=202611110237"></script>
+  <script src="value.js?v=202611110237"></script>
+  <script src="app.js?v=202611110237"></script>
+  <script src="editor.js?v=202611110237"></script>
+  <script src="bulk.js?v=202611110237"></script>
+  <script src="collection.js?v=202611110237"></script>
 </body>
 </html>

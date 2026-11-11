@@ -33,16 +33,14 @@ body {
 
 /* Rounded like a real card. Safari ignores overflow + border-radius for the moving layers inside
    a 3D card, so the corners are cut with clip-path (and the shadow sits on a layer behind). */
-.card { --round: 4.6% / 3.4%; }
-.card.slab { --round: 3% / 1.8%; } /* graded slab: tighter corners */
 .face {
   position: relative; overflow: hidden;
-  border-radius: var(--round);
-  clip-path: inset(0 round var(--round));
+  border-radius: 4.6% / 3.4%;
+  clip-path: inset(0 round 4.6% / 3.4%);
   isolation: isolate; /* blend modes below don't apply inside the 3D card without this */
 }
 .card::before {
-  content: ''; position: absolute; inset: 0; border-radius: var(--round);
+  content: ''; position: absolute; inset: 0; border-radius: 4.6% / 3.4%;
   box-shadow: 0 30px 60px -20px rgba(0,0,0,.85);
 }
 .art { display: block; width: 100%; filter: saturate(1.1); }
@@ -339,4 +337,3 @@ body.empty .card, body.empty .caption, body.empty .style-btn, body.empty .contro
   background: linear-gradient(180deg, #4a5ff0, #3446d4); border: 1px solid #6377f5;
 }
 .empty-state .text-btn { font: inherit; cursor: pointer; }
-.hint.warn { color: #ffcf7a; background: rgba(255, 180, 60, .1); border: 1px solid rgba(255, 180, 60, .3); border-radius: 12px; padding: 10px 12px; }

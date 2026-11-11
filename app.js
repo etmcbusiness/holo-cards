@@ -202,7 +202,6 @@
   function applyStyle() {
     const c = cards[index], st = styleOf(c);
     card.dataset.holo = st; // CSS: no foil on non-holo cards
-    card.classList.toggle('slab', !!c.slab); // a graded card shown in its case
     // Foil and shine where real cards have them: holo only in the art window, reverse holo
     // everywhere except the art window.
     const [l, t, w, h] = windowOf(c), r = l + w, b = t + h;

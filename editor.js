@@ -25,7 +25,7 @@
   }
 
   const toCard = (rec) => ({
-    id: rec.id, name: rec.name, info: rec.info, holo: rec.holo, glitter: rec.glitter, style: rec.style, ambience: rec.ambience, slab: rec.slab,
+    id: rec.id, name: rec.name, info: rec.info, holo: rec.holo, glitter: rec.glitter, style: rec.style, ambience: rec.ambience,
     art: URL.createObjectURL(rec.art),
     pop: { src: URL.createObjectURL(rec.pop), box: rec.box },
   });
@@ -126,16 +126,12 @@
   };
   $('keyCancel').onclick = () => { $('stepKey').hidden = true; close(); };
 
-  let slab = false; // the photo is a graded card in its case
-  const debugNotes = []; // what the app did with Gemini's answers (debug copy)
-  const note = (k, v) => debugNotes.push({ [k]: v });
   let pending = null; // the photo being processed, kept so a new key can retry it
   $('fileCard').onchange = (e) => { const f = e.target.files[0]; if (f) build(f); };
 
   async function build(f) {
     if (busy) return;
-    busy = true; made = null; pending = f; slab = false;
-    AI.log.length = 0; debugNotes.length = 0;
+    busy = true; made = null; pending = f;
     try {
       fillInfo({});
       await say('Looking at the photo…');
@@ -158,56 +154,21 @@
         info = await identify(P.fit(img, 1600));
         // straighten and crop it exactly using the corners Gemini found, else trim plain borders
         const ok = Array.isArray(info?.corners) && info.corners.length === 4 && info.corners.every((p) => p?.length === 2);
-        // A graded card keeps its whole case and label (its shape measured from the photo; slabs
-        // differ by company). Without the slab's corners, trim the plain background around it.
-        const four = (q) => Array.isArray(q) && q.length === 4 && q.every((p) => p?.length === 2);
-        slab = !!(info?.slab || info?.grading?.company); // a grade label means it is in a slab
         const ratio = /yu-?gi-?oh/i.test(info?.game || '') ? 59 / 86 : 63 / 88;
-        note('photo', [img.naturalWidth, img.naturalHeight]); note('slab', slab);
-        // no slab corners from Gemini: grow the card's corners out to where a slab's edges sit
-        // (measured on a PSA slab: label above, a thin rim on the other sides)
-        const slabQuad = () => {
-          if (four(info.slab_corners)) return info.slab_corners;
-          if (!ok) return null;
-          const [tl, tr, br, bl] = info.corners, at = (p, a, b) => [p[0] + a[0] + b[0], p[1] + a[1] + b[1]];
-          const v = (p, q, k) => [(q[0] - p[0]) * k, (q[1] - p[1]) * k];
-          return [
-            at(tl, v(tr, tl, 0.135), v(bl, tl, 0.48)), at(tr, v(tl, tr, 0.135), v(br, tr, 0.48)),
-            at(br, v(bl, br, 0.135), v(tr, br, 0.12)), at(bl, v(br, bl, 0.135), v(tl, bl, 0.12)),
-          ].map(([x, y]) => [Math.min(1000, Math.max(0, x)), Math.min(1000, Math.max(0, y))]);
-        };
-        const sq = slab ? slabQuad() : null;
-        note('slab_corners', sq);
-        const flat = ok ? P.straighten(img, info.corners, ratio) : P.cropCard(img); // just the card
-        const card = sq ? P.straighten(img, sq, null) : flat; // what's shown: the card, or its whole slab
-        // Gemini looks at the card alone (the slab's label and plastic threw its boxes off) and
-        // outlines the character; it's cut from the card's own pixels (nothing redrawn)
+        const card = ok ? P.straighten(img, info.corners, ratio) : P.cropCard(img);
+        // Gemini outlines the character; it's cut from the card's own pixels (nothing redrawn)
         await say('Finding the character…');
-        let [layout, mask] = await Promise.all([
-          inspect(flat),
-          AI.segment(flat).catch((e) => { console.warn('Could not outline the character:', e); note('segment_error', e.message); return null; }),
+        const [layout, mask] = await Promise.all([
+          inspect(card),
+          AI.segment(card).catch((e) => { console.warn('Could not outline the character:', e); return null; }),
         ]);
-        if (card !== flat && flat.quad) { // move what was found on the card into the slab picture
-          const b = P.boxWithin(card, flat), bw = b.r - b.l, bh = b.b - b.t;
-          note('card_in_slab', b);
-          const box = (q) => q && { l: (b.l + (q.l / 100) * bw) * 100, r: (b.l + (q.r / 100) * bw) * 100, t: (b.t + (q.t / 100) * bh) * 100, b: (b.t + (q.b / 100) * bh) * 100 };
-          if (layout) layout = { ...layout, win: box(layout.win), char: box(layout.char) };
-          const place = (m) => {
-            if (!m) return null;
-            const c = Object.assign(document.createElement('canvas'), { width: card.width, height: card.height });
-            c.getContext('2d').drawImage(m, b.l * card.width, b.t * card.height, bw * card.width, bh * card.height);
-            return c;
-          };
-          if (mask) mask = { body: place(mask.body), fx: place(mask.fx) };
-        }
-        note('mask', mask ? { body: true, fx: !!mask.fx } : null);
         if (mask) {
           await say('Adding the 3D shading…');
           made = fromMask(card, mask, layout);
-        } else {
-          // No outline: keep the real card without a pop-out (Gemini's repaint redraws the whole
-          // card and looks nothing like it, so it's only offered as a button)
-          made = fromNothing(card, layout);
+        } else { // no outline: fall back to Gemini repainting the card
+          const sep = await fromPhoto(card);
+          await say('Adding the 3D shading…');
+          made = fromSplit(sep, card, layout);
         }
         showPlace();
       }
@@ -292,13 +253,6 @@
     }
     showFx(masks.fx ? withFx : null);
     const char = P.maskCut(card, mask), o = char.offset;
-    note('card', [card.width, card.height]); note('cutout', [char.width, char.height, o]);
-    { // how solid the cut-out is
-      const d = char.getContext('2d').getImageData(0, 0, char.width, char.height).data;
-      let solid = 0, part = 0;
-      for (let k = 3; k < d.length; k += 4) { if (d[k] > 240) solid++; else if (d[k] > 10) part++; }
-      note('alpha', { solid, part });
-    }
     const w = layout?.win ? { l: layout.win.l / 100, t: layout.win.t / 100, r: layout.win.r / 100, b: layout.win.b / 100 } : P.findWindow(card);
     const w0 = (char.width / card.width) * 100, h0 = (char.height / card.height) * 100, w1 = w0 * 1.03;
     const cx = (o.x / card.width) * 100 + w0 / 2, cy = (o.y / card.height) * 100 + h0 / 2;
@@ -326,20 +280,6 @@
     if (Math.abs(oldW - made.pos.w) < 0.01) made.pos = pos;
     showPlace();
   };
-
-  // the card as it is, with nothing popping out (an empty cut-out)
-  function fromNothing(card, layout) {
-    showFx(null);
-    const w = layout?.win ? { l: layout.win.l / 100, t: layout.win.t / 100, r: layout.win.r / 100, b: layout.win.b / 100 } : P.findWindow(card);
-    const glitter = P.glitterFor(card, w);
-    setHolo(glitter.kind);
-    const char = Object.assign(document.createElement('canvas'), { width: 4, height: 4 });
-    return {
-      card, char, win: pct(w), hues: glitter.hues, pos: { w: 1, l: 0, t: 0 },
-      ambience: layout?.ambience || null, photoCard: card, layout,
-      message: "Couldn't outline the character this time, so it won't pop out. Save as it is, try again, or try Gemini's repaint below.",
-    };
-  }
 
   // A plain photo of a card: one Gemini call returns the card with the character painted
   // out and the character cut out beside it; that's split like a hand-made layered image.
@@ -375,14 +315,6 @@
     return split;
   }
 
-  // copy Gemini's answers and what was done with them, to paste into a bug report
-  $('copyDebug').onclick = async () => {
-    $('copyDebug').textContent = 'Copy debug info';
-    const text = JSON.stringify({ when: new Date().toISOString(), ua: navigator.userAgent, notes: debugNotes, gemini: AI.log }, null, 1);
-    try { await navigator.clipboard.writeText(text); $('copyDebug').textContent = 'Copied! Paste it in the chat'; }
-    catch { prompt('Copy this:', text.slice(0, 20000)); }
-  };
-
   // editor button: redo the separation with the better (pricier) model
   $('redoBest').onclick = async () => {
     if (busy || !made?.photoCard) return;
@@ -408,8 +340,6 @@
     $('placeArt').src = made.card.toDataURL('image/jpeg', 0.9);
     placeChar.src = made.char.toDataURL('image/png');
     $('redoBest').hidden = !made.photoCard; // only for cards Gemini separated
-    $('placeMsg').textContent = made.message || '';
-    $('placeMsg').hidden = !made.message;
     size.value = Math.round(made.pos.w);
     $('stepWork').hidden = true; $('stepPlace').hidden = false;
     requestAnimationFrame(render);
@@ -484,7 +414,6 @@
         glitter: made.hues,
         style: holoKind, // holo, reverse or none; the ✨ button on the main screen changes it
         ambience: made.ambience, // the background animation (app.js picks one from the colours when null)
-        slab, // shown in its graded case
       };
       await req('readwrite', (s) => s.put(rec));
       const c = toCard(rec);

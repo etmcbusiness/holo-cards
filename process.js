@@ -296,8 +296,7 @@ window.HoloProcess = (() => {
   // `corners`: rough [x, y] corners on a 0-1000 scale (top-left, top-right, bottom-right,
   // bottom-left), e.g. from Gemini. Each side is snapped onto the strongest straight edge
   // near it, the sides are intersected for exact corners, and the card is warped flat.
-  // ratio: width / height of this kind of card (most are 63 x 88 mm; Yu-Gi-Oh is 59 x 86), or
-  // null to measure it from the photo (graded slabs differ by company)
+  // ratio: width / height of this kind of card (most are 63 x 88 mm; Yu-Gi-Oh is 59 x 86)
   function straighten(img, corners, ratio = 63 / 88) {
     const src = fit(img, 1600), W = src.width, H = src.height;
     let quad = corners.map(([x, y]) => [(x / 1000) * W, (y / 1000) * H]);
@@ -305,15 +304,8 @@ window.HoloProcess = (() => {
     // pull in a hair so no sliver of the table or screen shows along the edges
     const cx = quad.reduce((s, p) => s + p[0], 0) / 4, cy = quad.reduce((s, p) => s + p[1], 0) / 4;
     quad = quad.map(([x, y]) => [x + (cx - x) * 0.012, y + (cy - y) * 0.012]);
-    if (!ratio) {
-      const d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
-      ratio = (d(quad[0], quad[1]) + d(quad[3], quad[2])) / (d(quad[0], quad[3]) + d(quad[1], quad[2]));
-      ratio = Math.min(0.75, Math.max(0.5, ratio));
-    }
     const outH = 1200, outW = Math.round(outH * ratio);
-    const out = warp(src, quad, outW, outH);
-    out.quad = quad; // where it came from in the (fitted) photo, for mapping between crops
-    return out;
+    return warp(src, quad, outW, outH);
   }
 
   function snapQuad(src, quad) {
@@ -655,18 +647,5 @@ window.HoloProcess = (() => {
     return out;
   }
 
-  // Where `inner` (one straightened crop of the photo, e.g. the card) sits inside `outer`
-  // (another crop of the same photo, e.g. the whole slab): { l, t, r, b } as fractions of outer.
-  function boxWithin(outer, inner) {
-    const rect = [[0, 0], [outer.width, 0], [outer.width, outer.height], [0, outer.height]];
-    const h = homography(outer.quad, rect); // photo -> outer
-    const pts = inner.quad.map(([x, y]) => {
-      const w = h[6] * x + h[7] * y + 1;
-      return [(h[0] * x + h[1] * y + h[2]) / w / outer.width, (h[3] * x + h[4] * y + h[5]) / w / outer.height];
-    });
-    const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
-    return { l: Math.min(...xs), t: Math.min(...ys), r: Math.max(...xs), b: Math.max(...ys) };
-  }
-
-  return { boxWithin, maskCut, inpaint, loadImage, fit, cutout, cropCard, straighten, splitLayered, locate, findWindow, glitterFor, stylize, fadeBottom, toBlob };
+  return { maskCut, inpaint, loadImage, fit, cutout, cropCard, straighten, splitLayered, locate, findWindow, glitterFor, stylize, fadeBottom, toBlob };
 })();

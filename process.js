@@ -311,7 +311,9 @@ window.HoloProcess = (() => {
       ratio = Math.min(0.75, Math.max(0.5, ratio));
     }
     const outH = 1200, outW = Math.round(outH * ratio);
-    return warp(src, quad, outW, outH);
+    const out = warp(src, quad, outW, outH);
+    out.quad = quad; // where it came from in the (fitted) photo, for mapping between crops
+    return out;
   }
 
   function snapQuad(src, quad) {
@@ -653,5 +655,18 @@ window.HoloProcess = (() => {
     return out;
   }
 
-  return { maskCut, inpaint, loadImage, fit, cutout, cropCard, straighten, splitLayered, locate, findWindow, glitterFor, stylize, fadeBottom, toBlob };
+  // Where `inner` (one straightened crop of the photo, e.g. the card) sits inside `outer`
+  // (another crop of the same photo, e.g. the whole slab): { l, t, r, b } as fractions of outer.
+  function boxWithin(outer, inner) {
+    const rect = [[0, 0], [outer.width, 0], [outer.width, outer.height], [0, outer.height]];
+    const h = homography(outer.quad, rect); // photo -> outer
+    const pts = inner.quad.map(([x, y]) => {
+      const w = h[6] * x + h[7] * y + 1;
+      return [(h[0] * x + h[1] * y + h[2]) / w / outer.width, (h[3] * x + h[4] * y + h[5]) / w / outer.height];
+    });
+    const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+    return { l: Math.min(...xs), t: Math.min(...ys), r: Math.max(...xs), b: Math.max(...ys) };
+  }
+
+  return { boxWithin, maskCut, inpaint, loadImage, fit, cutout, cropCard, straighten, splitLayered, locate, findWindow, glitterFor, stylize, fadeBottom, toBlob };
 })();

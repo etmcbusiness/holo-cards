@@ -190,13 +190,14 @@ window.HoloAI = (() => {
     'Output a JSON list of segmentation masks where each entry contains the 2D bounding box in the key "box_2d", ' +
     'the segmentation mask in key "mask", and the text label in the key "label".';
   // each model in turn until one gives a usable outline of the body
+  const SEGMENT_MODELS = ['gemini-2.5-flash', ...VISION_MODELS.filter((m) => m !== 'gemini-2.5-flash')];
   async function segment(card) {
-    for (const m of VISION_MODELS) {
+    for (const m of SEGMENT_MODELS) {
       let parts;
       try {
         ({ parts } = await call([m], {
           contents: [{ parts: [{ text: SEGMENT }, jpeg(card)] }],
-          generationConfig: { thinkingConfig: noThinking(m), responseMimeType: 'application/json' },
+          generationConfig: { thinkingConfig: noThinking(m), responseMimeType: 'application/json', maxOutputTokens: 32768 },
         }));
       } catch (e) {
         if (e instanceof KeyError) throw e;
@@ -212,6 +213,10 @@ window.HoloAI = (() => {
     const text = parts.map((p) => p.text || '').join('');
     let list;
     try { list = JSON.parse(text.replace(/^```(json)?|```$/g, '')); } catch { const m = text.match(/\[[\s\S]*\]/); try { list = m && JSON.parse(m[0]); } catch {} }
+    if (!list) { // an answer cut off part way: keep every entry that came through whole
+      list = [];
+      for (const e of text.match(/\{[^{}]*"box_2d"[^{}]*\}/g) || []) { try { list.push(JSON.parse(e)); } catch {} }
+    }
     if (!Array.isArray(list)) list = list ? [list] : [];
     const W = card.width, H = card.height;
     const layer = () => Object.assign(document.createElement('canvas'), { width: W, height: H });

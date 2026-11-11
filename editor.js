@@ -178,13 +178,28 @@
         };
         const sq = slab ? slabQuad() : null;
         note('slab_corners', sq);
-        const card = sq ? P.straighten(img, sq, null) : ok ? P.straighten(img, info.corners, ratio) : P.cropCard(img);
-        // Gemini outlines the character; it's cut from the card's own pixels (nothing redrawn)
+        const flat = ok ? P.straighten(img, info.corners, ratio) : P.cropCard(img); // just the card
+        const card = sq ? P.straighten(img, sq, null) : flat; // what's shown: the card, or its whole slab
+        // Gemini looks at the card alone (the slab's label and plastic threw its boxes off) and
+        // outlines the character; it's cut from the card's own pixels (nothing redrawn)
         await say('Finding the character…');
-        const [layout, mask] = await Promise.all([
-          inspect(card),
-          AI.segment(card).catch((e) => { console.warn('Could not outline the character:', e); note('segment_error', e.message); return null; }),
+        let [layout, mask] = await Promise.all([
+          inspect(flat),
+          AI.segment(flat).catch((e) => { console.warn('Could not outline the character:', e); note('segment_error', e.message); return null; }),
         ]);
+        if (card !== flat && flat.quad) { // move what was found on the card into the slab picture
+          const b = P.boxWithin(card, flat), bw = b.r - b.l, bh = b.b - b.t;
+          note('card_in_slab', b);
+          const box = (q) => q && { l: (b.l + (q.l / 100) * bw) * 100, r: (b.l + (q.r / 100) * bw) * 100, t: (b.t + (q.t / 100) * bh) * 100, b: (b.t + (q.b / 100) * bh) * 100 };
+          if (layout) layout = { ...layout, win: box(layout.win), char: box(layout.char) };
+          const place = (m) => {
+            if (!m) return null;
+            const c = Object.assign(document.createElement('canvas'), { width: card.width, height: card.height });
+            c.getContext('2d').drawImage(m, b.l * card.width, b.t * card.height, bw * card.width, bh * card.height);
+            return c;
+          };
+          if (mask) mask = { body: place(mask.body), fx: place(mask.fx) };
+        }
         note('mask', mask ? { body: true, fx: !!mask.fx } : null);
         if (mask) {
           await say('Adding the 3D shading…');

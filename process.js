@@ -297,13 +297,21 @@ window.HoloProcess = (() => {
   // bottom-left), e.g. from Gemini. Each side is snapped onto the strongest straight edge
   // near it, the sides are intersected for exact corners, and the card is warped flat.
   // ratio: width / height of this kind of card (most are 63 x 88 mm; Yu-Gi-Oh is 59 x 86)
-  function straighten(img, corners, ratio = 63 / 88) {
+  // snap false: use the corners exactly as given (the rectangle crop); ratio null: keep the
+  // crop's own shape instead of making it card-shaped
+  function straighten(img, corners, ratio = 63 / 88, { snap = true } = {}) {
     const src = fit(img, 1600), W = src.width, H = src.height;
     let quad = corners.map(([x, y]) => [(x / 1000) * W, (y / 1000) * H]);
-    try { quad = snapQuad(src, quad); } catch (e) { console.warn('Edge snap failed, using rough corners', e); }
-    // pull in a hair so no sliver of the table or screen shows along the edges
-    const cx = quad.reduce((s, p) => s + p[0], 0) / 4, cy = quad.reduce((s, p) => s + p[1], 0) / 4;
-    quad = quad.map(([x, y]) => [x + (cx - x) * 0.004, y + (cy - y) * 0.004]);
+    if (snap) {
+      try { quad = snapQuad(src, quad); } catch (e) { console.warn('Edge snap failed, using rough corners', e); }
+      // pull in a hair so no sliver of the table or screen shows along the edges
+      const cx = quad.reduce((s, p) => s + p[0], 0) / 4, cy = quad.reduce((s, p) => s + p[1], 0) / 4;
+      quad = quad.map(([x, y]) => [x + (cx - x) * 0.004, y + (cy - y) * 0.004]);
+    }
+    if (!ratio) {
+      const d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+      ratio = (d(quad[0], quad[1]) + d(quad[3], quad[2])) / (d(quad[0], quad[3]) + d(quad[1], quad[2]));
+    }
     const outH = 1200, outW = Math.round(outH * ratio);
     return warp(src, quad, outW, outH);
   }

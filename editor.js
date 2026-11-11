@@ -89,6 +89,7 @@
     $('spinner').hidden = failed;
     $('retryPick').hidden = !failed;
     $('ownCharBtn').hidden = true;
+    $('geminiCutBtn').hidden = true;
   }
   // "+ Add card": photos for Gemini, or the user's own cut-out plus the card
   const choice = $('addChoice');
@@ -177,7 +178,7 @@
           { label: `Check the crop · ${i + 1} of ${files.length}`, skip: 'Skip this one' });
         URL.revokeObjectURL(img.src);
         if (corners === 'stop') break;
-        if (corners) jobs.push({ file: f, corners });
+        if (corners) jobs.push({ file: f, corners: [...corners], rect: !!corners.rect });
       }
       close();
       if (jobs.length) window.HoloBulk.enqueue(jobs);
@@ -190,6 +191,9 @@
   const identify = (c) => (AI.getKey() ? AI.identify(c).catch((e) => { if (e instanceof AI.StopError) throw e; console.warn('Could not identify the card:', e); return null; }) : null);
   const inspect = (c) => (AI.getKey() ? AI.inspect(c).catch((e) => { if (e instanceof AI.StopError) throw e; console.warn('Could not inspect the card:', e); return null; }) : null);
   const ratioFor = (info) => (/yu-?gi-?oh/i.test(info?.game || '') ? 59 / 86 : 63 / 88);
+  // the checked crop -> the flat card: a rectangle crop is used exactly as drawn (no snapping,
+  // its own shape); a corners crop is snapped onto the card's edges and made card-shaped
+  const cropTo = (img, corners, ratio) => P.straighten(img, corners, corners.rect ? null : ratio, { snap: !corners.rect });
   const FOILS = ['holo', 'reverse', 'none'];
 
   // The straightened card -> made: Gemini marks which pixels are the character; it's cut from
@@ -207,7 +211,8 @@
   // A photo added with nobody watching (bulk.js): Gemini's corners for the crop (else the whole
   // photo), Gemini's reading for the details and grade, then saved like the Save button does.
   // corners: the crop the user checked (0-1000 of the photo), else Gemini's guess
-  async function autoAdd(file, checked = null) {
+  async function autoAdd(file, checked = null, rect = false) {
+    if (checked) checked = Object.assign([...checked], { rect });
     const img = await P.loadImage(file);
     const split = P.splitLayered(img);
     let info, made;
@@ -218,7 +223,7 @@
       info = await identify(P.fit(img, 1600));
       const four = Array.isArray(info?.corners) && info.corners.length === 4 && info.corners.every((p) => p?.length === 2);
       const corners = checked || (four ? info.corners : [[0, 0], [1000, 0], [1000, 1000], [0, 1000]]);
-      made = await cutAndPlace(P.straighten(img, corners, ratioFor(info)));
+      made = await cutAndPlace(cropTo(img, corners, ratioFor(info)));
       if (made.message) throw new Error("Couldn't cut out the character this time. Tap Retry.");
     }
     const g = gradeFrom(info || {});
@@ -257,7 +262,7 @@
         // the crop starts as the whole picture; the user drags it in to the card (asked for 2026-11-10)
         const corners = await askCrop(img, [[0, 0], [1000, 0], [1000, 1000], [0, 1000]], ratio);
         if (!corners) { close(); return; }
-        const card = P.straighten(img, corners, ratio);
+        const card = cropTo(img, corners, ratio);
         await say('Cutting out the character… (about 20 seconds)');
         made = await cutAndPlace(card);
         setHolo(made.kind);
@@ -453,28 +458,57 @@
     document.body.classList.add('editing');
     $('stepWork').hidden = true; $('stepPlace').hidden = true; $('stepKey').hidden = true; $('stepCrop').hidden = false;
     const box = $('crop'), dots = [...box.querySelectorAll('.dot')];
+    // two ways: four free corners, or a straight rectangle whose sides are dragged
+    let mode = 'corners';
+    try { mode = localStorage.getItem('holo-crop-mode') === 'rect' ? 'rect' : 'corners'; } catch {}
+    const rect = () => {
+      const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+      return { l: Math.min(...xs), t: Math.min(...ys), r: Math.max(...xs), b: Math.max(...ys) };
+    };
+    const setRect = (q) => { pts[0] = [q.l, q.t]; pts[1] = [q.r, q.t]; pts[2] = [q.r, q.b]; pts[3] = [q.l, q.b]; };
+    const setMode = (m) => {
+      mode = m;
+      try { localStorage.setItem('holo-crop-mode', m); } catch {}
+      if (m === 'rect') setRect(rect());
+      for (const b of $('cropMode').children) b.setAttribute('aria-checked', b.dataset.mode === m);
+      $('cropHint').textContent = m === 'rect' ? 'Drag the 4 dots to move the top, bottom and sides.' : "Drag the 4 dots onto the card's corners.";
+      box.classList.toggle('rect', m === 'rect');
+      draw();
+    };
+    for (const b of $('cropMode').children) b.onclick = () => setMode(b.dataset.mode);
     $('cropImg').src = P.fit(img, 1400).toDataURL('image/jpeg', 0.85);
     // the whole photo fits on screen, however tall it is (a phone screenshot pushed the bottom dots off it)
     box.style.width = `min(100%, calc((100svh - 280px) * ${(W / H).toFixed(4)}))`;
     const draw = () => {
-      dots.forEach((d, i) => { d.style.left = `${pts[i][0] / 10}%`; d.style.top = `${pts[i][1] / 10}%`; });
+      if (mode === 'rect') { // dots on the middle of each side: top, right, bottom, left
+        const q = rect(), mid = [[(q.l + q.r) / 2, q.t], [q.r, (q.t + q.b) / 2], [(q.l + q.r) / 2, q.b], [q.l, (q.t + q.b) / 2]];
+        dots.forEach((d, i) => { d.style.left = `${mid[i][0] / 10}%`; d.style.top = `${mid[i][1] / 10}%`; });
+      } else dots.forEach((d, i) => { d.style.left = `${pts[i][0] / 10}%`; d.style.top = `${pts[i][1] / 10}%`; });
       const r = box.getBoundingClientRect();
       $('cropSvg').setAttribute('viewBox', `0 0 ${r.width} ${r.height}`);
       $('cropPoly').setAttribute('points', pts.map(([x, y]) => `${(x / 1000) * r.width},${(y / 1000) * r.height}`).join(' '));
     };
-    $('cropImg').onload = draw;
+    $('cropImg').onload = () => setMode(mode);
     dots.forEach((d, i) => {
       d.onpointerdown = (e) => { e.preventDefault(); d.setPointerCapture(e.pointerId); d.classList.add('on'); };
       d.onpointermove = (e) => {
         if (!d.hasPointerCapture(e.pointerId)) return;
         const r = box.getBoundingClientRect();
-        pts[i] = [Math.min(1000, Math.max(0, ((e.clientX - r.left) / r.width) * 1000)), Math.min(1000, Math.max(0, ((e.clientY - r.top) / r.height) * 1000))];
+        const x = Math.min(1000, Math.max(0, ((e.clientX - r.left) / r.width) * 1000)), y = Math.min(1000, Math.max(0, ((e.clientY - r.top) / r.height) * 1000));
+        if (mode === 'rect') { // this dot moves one side only
+          const q = rect();
+          if (i === 0) q.t = Math.min(y, q.b - 50);
+          if (i === 1) q.r = Math.max(x, q.l + 50);
+          if (i === 2) q.b = Math.max(y, q.t + 50);
+          if (i === 3) q.l = Math.min(x, q.r - 50);
+          setRect(q);
+        } else pts[i] = [x, y];
         draw();
       };
       d.onpointerup = d.onpointercancel = () => d.classList.remove('on');
     });
     return new Promise((ok) => {
-      $('cropOk').onclick = () => { $('stepCrop').hidden = true; ok(pts); };
+      $('cropOk').onclick = () => { $('stepCrop').hidden = true; ok(Object.assign(pts, { rect: mode === 'rect' })); };
       $('cropCancel').onclick = () => { $('stepCrop').hidden = true; ok(null); };
       $('cropStop').onclick = () => { $('stepCrop').hidden = true; ok('stop'); };
     });
@@ -579,6 +613,7 @@
     const rec = {
       id,
       photo: d.photo || null, // the original photo (fitted), so the card can be re-cropped later
+      own: made.own || null, // the user's own cut-out (re-cropping then needs no AI)
       name: d.name || `Card ${new Date().toLocaleDateString()}`,
       info: d.info, // game, set, year, number, edition
       art: await P.toBlob(made.card, 'image/jpeg', 0.9),
@@ -654,7 +689,7 @@
         card, char, pos: { l, t, w }, win: { l: hw[0], t: hw[1], r: hw[0] + hw[2], b: hw[1] + hw[3] },
         hues: c.glitter, ambience: c.ambience || null, kind, fx: null, photoCard: null, layout: null, message: '',
       };
-      editing = { c, photo: rec?.photo || null };
+      editing = { c, photo: rec?.photo || null, own: rec?.own || null };
       // its details and grade as they are now
       const v = window.HoloValue?.get(c) || {};
       $('cardName').value = c.name || '';
@@ -685,9 +720,35 @@
       const ratio = ratioFor({ game: keep.info.game });
       const corners = await askCrop(img, [[0, 0], [1000, 0], [1000, 1000], [0, 1000]], ratio);
       if (!corners) { showPlace(); return; }
-      await say('Cutting out the character… (about 20 seconds)');
-      made = await cutAndPlace(P.straighten(img, corners, ratio));
-      showPlace();
+      const card = cropTo(img, corners, ratio);
+      if (editing.own) { // the user's own cut-out: lined up again, no AI
+        await say('Lining the character up with the card…');
+        const own = editing.own;
+        made = fromOwn(card, P.cutout(await P.loadImage(new File([own], 'cutout.png', { type: own.type || 'image/png' })), { minPiece: 0.002 }));
+        made.own = own;
+        showPlace();
+        return;
+      }
+      // no cut-out kept: the user's own (free) or Gemini's
+      ownCard = card; ownInfo = Promise.resolve(null);
+      showWork('How should the character be cut out?');
+      $('spinner').hidden = true;
+      $('ownCharBtn').hidden = false;
+      $('geminiCutBtn').hidden = false;
+      $('geminiCutBtn').onclick = async () => {
+        if (busy) return;
+        busy = true;
+        try {
+          await say('Cutting out the character… (about 20 seconds)');
+          made = await cutAndPlace(card);
+          showPlace();
+        } catch (err) {
+          console.error(err);
+          showWork(err.message || 'Something went wrong.', true);
+        } finally {
+          busy = false;
+        }
+      };
     } catch (err) {
       console.error(err);
       showWork(err.message || 'Something went wrong.', true);
@@ -716,7 +777,7 @@
       photoBlob = await P.toBlob(P.fit(img, 1600), 'image/jpeg', 0.85);
       const corners = await askCrop(img, [[0, 0], [1000, 0], [1000, 1000], [0, 1000]], 63 / 88);
       if (!corners) { close(); return; }
-      ownCard = P.straighten(img, corners, 63 / 88);
+      ownCard = cropTo(img, corners, 63 / 88);
       // details from Gemini if it's available (cheap); fine without
       ownInfo = AI.getKey() ? AI.identify(P.fit(img, 1600)).catch(() => null) : Promise.resolve(null);
       showWork('Now choose the character, already cut out: a PNG with a see-through background, or the character on a plain or checkered background.');
@@ -737,8 +798,10 @@
     try {
       await say('Lining the character up with the card…');
       const char = P.cutout(await P.loadImage(f), { minPiece: 0.002 }); // keeps real see-through, else removes a plain/checkered background
+      const kind = holoKind;
       made = fromOwn(ownCard, char);
-      setHolo(made.kind);
+      made.own = f; // kept with the card, so it can be re-cropped later without AI
+      setHolo(editing ? kind : made.kind);
       const info = await ownInfo;
       if (info) {
         fillInfo(info);

@@ -69,7 +69,7 @@
   function showWork(msg, failed = false) {
     editor.hidden = false;
     document.body.classList.add('editing');
-    $('stepWork').hidden = false; $('stepPlace').hidden = true; $('stepKey').hidden = true;
+    $('stepWork').hidden = false; $('stepPlace').hidden = true; $('stepKey').hidden = true; $('stepCrop').hidden = true;
     status.textContent = msg;
     $('spinner').hidden = failed;
     $('retryPick').hidden = !failed;
@@ -152,12 +152,15 @@
         if (!AI.getKey()) await askForKey();
         await say('Reading the card…');
         info = await identify(P.fit(img, 1600));
-        // straighten and crop it exactly using the corners Gemini found, else trim plain borders
+        // the card's corners: Gemini's guess, checked (and fixed if needed) by the user, then the
+        // card is straightened and cropped exactly (each side snaps onto the card's edge)
         const ok = Array.isArray(info?.corners) && info.corners.length === 4 && info.corners.every((p) => p?.length === 2);
         const ratio = /yu-?gi-?oh/i.test(info?.game || '') ? 59 / 86 : 63 / 88;
-        const card = ok ? P.straighten(img, info.corners, ratio) : P.cropCard(img);
-        // Gemini outlines the character; it's cut from the card's own pixels (nothing redrawn)
+        const corners = await askCrop(img, ok ? info.corners : null, ratio);
+        if (!corners) { close(); return; }
         await say('Finding the character…');
+        const card = P.straighten(img, corners, ratio);
+        // Gemini outlines the character; it's cut from the card's own pixels (nothing redrawn)
         const [layout, mask] = await Promise.all([
           inspect(card),
           AI.segment(card).catch((e) => { console.warn('Could not outline the character:', e); return null; }),
@@ -332,6 +335,44 @@
       busy = false;
     }
   };
+
+  // ---------- check the crop: four draggable corners over the photo ----------
+  // corners on a 0-1000 scale of the photo (top-left, top-right, bottom-right, bottom-left);
+  // resolves with the checked corners, or null on Cancel.
+  function askCrop(img, corners, ratio) {
+    const W = img.naturalWidth || img.width, H = img.naturalHeight || img.height;
+    if (!corners) { // no guess: a card-shaped box in the middle
+      const h = Math.min(800, (800 * W) / (ratio * H)), w = (h * ratio * H) / W;
+      corners = [[500 - w / 2, 500 - h / 2], [500 + w / 2, 500 - h / 2], [500 + w / 2, 500 + h / 2], [500 - w / 2, 500 + h / 2]];
+    }
+    const pts = corners.map(([x, y]) => [Math.min(1000, Math.max(0, x)), Math.min(1000, Math.max(0, y))]);
+    editor.hidden = false;
+    document.body.classList.add('editing');
+    $('stepWork').hidden = true; $('stepPlace').hidden = true; $('stepKey').hidden = true; $('stepCrop').hidden = false;
+    const box = $('crop'), dots = [...box.querySelectorAll('.dot')];
+    $('cropImg').src = P.fit(img, 1400).toDataURL('image/jpeg', 0.85);
+    const draw = () => {
+      dots.forEach((d, i) => { d.style.left = `${pts[i][0] / 10}%`; d.style.top = `${pts[i][1] / 10}%`; });
+      const r = box.getBoundingClientRect();
+      $('cropSvg').setAttribute('viewBox', `0 0 ${r.width} ${r.height}`);
+      $('cropPoly').setAttribute('points', pts.map(([x, y]) => `${(x / 1000) * r.width},${(y / 1000) * r.height}`).join(' '));
+    };
+    $('cropImg').onload = draw;
+    dots.forEach((d, i) => {
+      d.onpointerdown = (e) => { e.preventDefault(); d.setPointerCapture(e.pointerId); d.classList.add('on'); };
+      d.onpointermove = (e) => {
+        if (!d.hasPointerCapture(e.pointerId)) return;
+        const r = box.getBoundingClientRect();
+        pts[i] = [Math.min(1000, Math.max(0, ((e.clientX - r.left) / r.width) * 1000)), Math.min(1000, Math.max(0, ((e.clientY - r.top) / r.height) * 1000))];
+        draw();
+      };
+      d.onpointerup = d.onpointercancel = () => d.classList.remove('on');
+    });
+    return new Promise((ok) => {
+      $('cropOk').onclick = () => { $('stepCrop').hidden = true; ok(pts); };
+      $('cropCancel').onclick = () => { $('stepCrop').hidden = true; ok(null); };
+    });
+  }
 
   // ---------- step 2: check and adjust ----------
   const place = $('place'), placeChar = $('placeChar'), winBox = $('win'), size = $('charSize');

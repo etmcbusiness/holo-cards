@@ -439,6 +439,11 @@ window.HoloProcess = (() => {
     const m = 6; // stay clear of the seam
     const card = cropCard(cardLeft ? region(0, split - m) : region(split + m, W));
     const char = cutout(cardLeft ? region(split + m, W) : region(0, split - m), { minPiece: 0.002 }); // keep embers
+    // Only a real "card + cut-out" image: the card side card-shaped, the character a decent size
+    // and not a sliver. (A phone screenshot of a card on a light page once passed as one.)
+    const ar = card.width / card.height, car = char.width / char.height;
+    if (ar < 0.55 || ar > 0.85) return null;
+    if (car < 0.25 || car > 4 || char.width * char.height < card.width * card.height * 0.08) return null;
     return { card, char };
   }
 

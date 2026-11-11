@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Holo Cards">
   <meta name="theme-color" content="#0c0c10">
-  <link rel="stylesheet" href="style.css?v=202611110014">
+  <link rel="stylesheet" href="style.css?v=202611110016">
 </head>
 <body>
   <main class="stage" id="stage">
@@ -62,6 +62,19 @@
       <p class="status" id="keyMsg"></p>
       <button class="big primary" id="keySave">Save key and continue</button>
       <button class="big" id="keyCancel">Cancel</button>
+    </div>
+    <div class="step" id="stepCrop" hidden>
+      <h2 class="center">Check the crop</h2>
+      <p class="hint center">Drag the 4 dots onto the card's corners.</p>
+      <div class="crop" id="crop">
+        <img id="cropImg" alt="">
+        <svg id="cropSvg"><polygon id="cropPoly"></polygon></svg>
+        <i class="dot" data-i="0"></i><i class="dot" data-i="1"></i><i class="dot" data-i="2"></i><i class="dot" data-i="3"></i>
+      </div>
+      <div class="actions">
+        <button class="big" id="cropCancel">Cancel</button>
+        <button class="big primary" id="cropOk">Looks right</button>
+      </div>
     </div>
     <div class="step" id="stepWork">
       <div class="spinner" id="spinner"></div>
@@ -149,11 +162,11 @@
     </div>
   </section>
 
-  <script src="cards.js?v=202611110014"></script>
-  <script src="process.js?v=202611110014"></script>
-  <script src="ai.js?v=202611110014"></script>
-  <script src="value.js?v=202611110014"></script>
-  <script src="app.js?v=202611110014"></script>
-  <script src="editor.js?v=202611110014"></script>
+  <script src="cards.js?v=202611110016"></script>
+  <script src="process.js?v=202611110016"></script>
+  <script src="ai.js?v=202611110016"></script>
+  <script src="value.js?v=202611110016"></script>
+  <script src="app.js?v=202611110016"></script>
+  <script src="editor.js?v=202611110016"></script>
 </body>
 </html>

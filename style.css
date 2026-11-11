@@ -440,3 +440,12 @@ body.editing .grid-btn, body.editing .bulk-pill, body.empty .grid-btn { display:
 .crop.rect .dot { border-radius: 8px; width: 34px; height: 20px; margin: -10px 0 0 -17px; }
 .crop.rect .dot:nth-of-type(2), .crop.rect .dot:nth-of-type(4) { width: 20px; height: 34px; margin: -17px 0 0 -10px; }
 .editor { overflow-x: hidden; }
+
+/* moved to peterhaight.com: notice, and the backup buttons in All cards */
+.moved {
+  flex: none; display: block; margin: calc(56px + env(safe-area-inset-top)) 14px 0; padding: 10px 14px; border-radius: 12px;
+  font-size: 13px; line-height: 1.4; color: #ffe08a; text-decoration: none;
+  background: rgba(59, 50, 32, .75); border: 1px solid rgba(201, 162, 39, .6);
+}
+body.editing .moved { display: none; }
+.col-backup { display: flex; justify-content: center; gap: 18px; padding: 4px 0 calc(16px + env(safe-area-inset-bottom)); }

@@ -8,7 +8,7 @@ window.HoloBulk = (() => {
   const store = () => window.HoloStore;
   const AT_ONCE = 2;
   const items = []; // { id, file, name, status: 'waiting'|'working'|'failed', error, thumb }
-  let added = 0, running = 0, paused = '';
+  let added = 0, running = 0, paused = '', pausedForKey = false;
 
   const put = (it) => store().req('readwrite', (s) => s.put({ id: it.id, file: it.file, corners: it.corners || null, name: it.name, status: it.status === 'working' ? 'waiting' : it.status, error: it.error || '' }));
   const drop = (it) => store().req('readwrite', (s) => s.delete(it.id));
@@ -49,9 +49,10 @@ window.HoloBulk = (() => {
       await drop(it).catch(() => {});
     } catch (e) {
       console.error('Background add failed:', e);
-      if (e instanceof window.HoloAI.KeyError) { // no point going on: wait for a new key
+      if (e instanceof window.HoloAI.StopError) { // no point going on: wait for a new key / credits
         it.status = 'waiting';
         paused = e.message;
+        pausedForKey = e instanceof window.HoloAI.KeyError;
       } else {
         it.status = 'failed';
         it.error = e.message || 'Something went wrong.';
@@ -81,7 +82,7 @@ window.HoloBulk = (() => {
     const pill = $('bulkPill');
     pill.hidden = !items.length && !added;
     pill.classList.toggle('warn', !!paused || (!left && failed > 0));
-    pill.textContent = paused ? '⏸ Adding paused: tap'
+    pill.textContent = paused ? (/credits/i.test(paused) ? '⏸ Gemini credits ran out: tap' : '⏸ Adding paused: tap')
       : left ? `⏳ Adding cards · ${added} done, ${left} to go`
         : failed ? `⚠️ ${failed} couldn't be added: tap`
           : `✓ ${added} card${added === 1 ? '' : 's'} added`;
@@ -94,6 +95,7 @@ window.HoloBulk = (() => {
       ? `Paused: ${paused}`
       : 'Keep Holo Cards open (you can look through your cards meanwhile). If you leave the app it waits, and carries on when you come back.';
     $('bulkResume').hidden = !paused;
+    $('bulkResume').textContent = pausedForKey ? 'Enter Gemini key and carry on' : 'Carry on';
     const ul = $('bulkList');
     ul.innerHTML = '';
     for (const it of items) {
@@ -125,10 +127,12 @@ window.HoloBulk = (() => {
   $('bulkSheet').onclick = (e) => { if (e.target === $('bulkSheet')) $('bulkSheet').hidden = true; };
   $('bulkResume').onclick = async () => {
     $('bulkSheet').hidden = true;
-    await store().askForKey(paused);
-    document.getElementById('editor').hidden = true;
-    document.body.classList.remove('editing');
-    paused = '';
+    if (pausedForKey) {
+      await store().askForKey(paused);
+      document.getElementById('editor').hidden = true;
+      document.body.classList.remove('editing');
+    }
+    paused = ''; pausedForKey = false;
     pump();
   };
 

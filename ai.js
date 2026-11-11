@@ -31,7 +31,11 @@ window.HoloAI = (() => {
   const getKey = () => { try { return localStorage.getItem(KEY) || ''; } catch { return ''; } };
   const setKey = (k) => { try { k ? localStorage.setItem(KEY, k.trim()) : localStorage.removeItem(KEY); } catch {} };
 
-  class KeyError extends Error {}
+  // errors that stop everything (no point trying other models or carrying on):
+  // a bad key, or no money left on the Gemini account
+  class StopError extends Error {}
+  class KeyError extends StopError {}
+  class BillingError extends StopError {}
 
   // POST to the first model that works; returns the first candidate as { parts, grounding }
   // body: the request, or (model) => request when it differs per model
@@ -49,6 +53,9 @@ window.HoloAI = (() => {
         const msg = json.error?.message || `Gemini error ${r.status}`;
         if (r.status === 400 && /api key/i.test(msg)) throw new KeyError('That Gemini API key was not accepted.');
         if (r.status === 403) throw new KeyError('That Gemini API key is not allowed to use this.');
+        if (r.status === 402 || /credits are depleted|prepayment|billing account/i.test(msg)) {
+          throw new BillingError('Your Gemini credits have run out. Top them up at aistudio.google.com (Billing), then carry on.');
+        }
         if (r.status === 429) {
           lastErr = /limit: 0|free_tier|billing/i.test(msg)
             ? new Error('Your Gemini key has no allowance for this. Turn on billing for it at aistudio.google.com (Settings → Billing), then try again.')
@@ -178,7 +185,7 @@ window.HoloAI = (() => {
     // Two cut-outs at once, each with its own flat colour, and only what both kept counts: the
     // character comes out the same every time, stray bits of background (lettering, swooshes)
     // don't. If only one works, that one is used; if neither, the Pro model gets one more go.
-    const once = (key, model) => cutOnce(card, key, model).catch((e) => { if (e instanceof KeyError) throw e; console.warn('Cut-out try failed:', e); return null; });
+    const once = (key, model) => cutOnce(card, key, model).catch((e) => { if (e instanceof StopError) throw e; console.warn('Cut-out try failed:', e); return null; });
     const [a, b] = await Promise.all([once(keys[0], CUT_MODELS[0]), once(keys[1] || keys[0], CUT_MODELS[0])]);
     // returns { mask, image }: image is Gemini's picture of the character (used where it took text off)
     if (a && b) {
@@ -268,5 +275,5 @@ window.HoloAI = (() => {
     };
   }
 
-  return { getKey, setKey, layered, identify, inspect, cutMask, value, KeyError };
+  return { getKey, setKey, layered, identify, inspect, cutMask, value, KeyError, BillingError, StopError };
 })();

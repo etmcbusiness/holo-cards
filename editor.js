@@ -179,8 +179,8 @@
   };
 
   // Gemini reads the card (name, set, grade…) and finds the art window; both skipped without a key
-  const identify = (c) => (AI.getKey() ? AI.identify(c).catch((e) => { if (e instanceof AI.KeyError) throw e; console.warn('Could not identify the card:', e); return null; }) : null);
-  const inspect = (c) => (AI.getKey() ? AI.inspect(c).catch((e) => { console.warn('Could not inspect the card:', e); return null; }) : null);
+  const identify = (c) => (AI.getKey() ? AI.identify(c).catch((e) => { if (e instanceof AI.StopError) throw e; console.warn('Could not identify the card:', e); return null; }) : null);
+  const inspect = (c) => (AI.getKey() ? AI.inspect(c).catch((e) => { if (e instanceof AI.StopError) throw e; console.warn('Could not inspect the card:', e); return null; }) : null);
   const ratioFor = (info) => (/yu-?gi-?oh/i.test(info?.game || '') ? 59 / 86 : 63 / 88);
   const FOILS = ['holo', 'reverse', 'none'];
 
@@ -191,7 +191,7 @@
       inspect(card),
       AI.cutMask(card, P.keyColours(card))
         .then((m) => m && { body: m.mask, fx: null, clean: P.removeText(card, m.image, m.mask) })
-        .catch((e) => { if (e instanceof AI.KeyError) throw e; console.warn('Could not cut out the character:', e); return null; }),
+        .catch((e) => { if (e instanceof AI.StopError) throw e; console.warn('Could not cut out the character:', e); return null; }),
     ]);
     return mask ? fromMask(card, mask, layout) : fromNothing(card, layout);
   }
@@ -211,6 +211,7 @@
       const four = Array.isArray(info?.corners) && info.corners.length === 4 && info.corners.every((p) => p?.length === 2);
       const corners = checked || (four ? info.corners : [[0, 0], [1000, 0], [1000, 1000], [0, 1000]]);
       made = await cutAndPlace(P.straighten(img, corners, ratioFor(info)));
+      if (made.message) throw new Error("Couldn't cut out the character this time. Tap Retry.");
     }
     const g = gradeFrom(info || {});
     return saveRecord(made, {

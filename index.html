@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Holo Cards">
   <meta name="theme-color" content="#0c0c10">
-  <link rel="stylesheet" href="style.css?v=202611110214">
+  <link rel="stylesheet" href="style.css?v=202611110224">
 </head>
 <body>
   <main class="stage" id="stage">
@@ -226,7 +226,7 @@
   <!-- newest version: this page may be cached for ~10 min, so check version.txt and reload -->
   <script id="build">
     (function () {
-      var BUILD = '202611110214';
+      var BUILD = '202611110224';
       fetch('version.txt?' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (v) {
         v = (v || '').trim();
         if (v && v !== BUILD && sessionStorage.getItem('holo-reloaded') !== v) {
@@ -236,13 +236,13 @@
       }).catch(function () {});
     })();
   </script>
-  <script src="cards.js?v=202611110214"></script>
-  <script src="process.js?v=202611110214"></script>
-  <script src="ai.js?v=202611110214"></script>
-  <script src="value.js?v=202611110214"></script>
-  <script src="app.js?v=202611110214"></script>
-  <script src="editor.js?v=202611110214"></script>
-  <script src="bulk.js?v=202611110214"></script>
-  <script src="collection.js?v=202611110214"></script>
+  <script src="cards.js?v=202611110224"></script>
+  <script src="process.js?v=202611110224"></script>
+  <script src="ai.js?v=202611110224"></script>
+  <script src="value.js?v=202611110224"></script>
+  <script src="app.js?v=202611110224"></script>
+  <script src="editor.js?v=202611110224"></script>
+  <script src="bulk.js?v=202611110224"></script>
+  <script src="collection.js?v=202611110224"></script>
 </body>
 </html>

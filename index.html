@@ -12,10 +12,10 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Holo Cards">
   <meta name="theme-color" content="#0c0c10">
-  <link rel="stylesheet" href="style.css?v=202611110500">
+  <link rel="stylesheet" href="style.css?v=202611110600">
 </head>
 <body>
-  <a class="moved" href="https://peterhaight.com/">Holo Cards has moved to <b>peterhaight.com</b> (Items → Collectibles). To bring your cards: tap <b>All → Save a backup</b> here, then <b>All → Restore a backup</b> there.</a>
+  <a class="moved" href="https://peterhaight.com/">Holo Cards has moved to <b>peterhaight.com</b>: trading cards are now Collectibles in the Items menu. To bring your cards: tap <b>All → Save a backup</b> here, then on peterhaight.com <b>Items → Add item → Trading card → Restore from a backup</b>.</a>
   <main class="stage" id="stage">
     <div class="empty-state" id="empty" hidden>
       <div class="empty-icon">✨</div>
@@ -249,7 +249,7 @@
   <!-- newest version: this page may be cached for ~10 min, so check version.txt and reload -->
   <script id="build">
     (function () {
-      var BUILD = '202611110500';
+      var BUILD = '202611110600';
       fetch('version.txt?' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (v) {
         v = (v || '').trim();
         if (v && v !== BUILD && sessionStorage.getItem('holo-reloaded') !== v) {
@@ -259,14 +259,14 @@
       }).catch(function () {});
     })();
   </script>
-  <script src="cards.js?v=202611110500"></script>
-  <script src="process.js?v=202611110500"></script>
-  <script src="ai.js?v=202611110500"></script>
-  <script src="value.js?v=202611110500"></script>
-  <script src="app.js?v=202611110500"></script>
-  <script src="editor.js?v=202611110500"></script>
-  <script src="bulk.js?v=202611110500"></script>
-  <script src="collection.js?v=202611110500"></script>
-  <script src="backup.js?v=202611110500"></script>
+  <script src="cards.js?v=202611110600"></script>
+  <script src="process.js?v=202611110600"></script>
+  <script src="ai.js?v=202611110600"></script>
+  <script src="value.js?v=202611110600"></script>
+  <script src="app.js?v=202611110600"></script>
+  <script src="editor.js?v=202611110600"></script>
+  <script src="bulk.js?v=202611110600"></script>
+  <script src="collection.js?v=202611110600"></script>
+  <script src="backup.js?v=202611110600"></script>
 </body>
 </html>

@@ -54,7 +54,7 @@
     index = (i + cards.length) % cards.length;
     const c = cards[index], me = ++showing;
     card.classList.add('swap');
-    await Promise.all([preload(c.art), preload(c.pop?.src), new Promise((r) => setTimeout(r, 180))]);
+    await Promise.all([preload(c.art), preload(c.pop?.src), dress(c.pop?.src), new Promise((r) => setTimeout(r, 180))]);
     if (me !== showing) return; // tapped on again meanwhile
     {
       art.alt = c.name;
@@ -106,7 +106,9 @@
     // art position inside the card (offsets ignore the 3D tilt)
     let x = 0, y = 0;
     for (let el = art; el && el !== card; el = el.offsetParent) { x += el.offsetLeft; y += el.offsetTop; }
-    const [l, t, w, h] = c.pop.box;
+    let [l, t, w, h] = c.pop.box;
+    const pd = looks.has(c.pop.src) && padFor.get(c.pop.src);
+    if (pd) { l -= w * pd.x; t -= h * pd.y; w *= 1 + pd.x * 2; h *= 1 + pd.y * 2; }
     const W = art.offsetWidth, H = art.offsetHeight;
     const pw = (w / 100) * W, ph = (h / 100) * H;
     Object.assign(pop.style, {
@@ -129,9 +131,56 @@
         `transform:translateZ(${z.toFixed(2)}px) rotateY(${a.toFixed(4)}rad)"></i>`;
     }
     pop.innerHTML = html;
-    pop.style.setProperty('--pop-src', `url("${c.pop.src}")`);
+    pop.style.setProperty('--pop-src', `url("${looks.get(c.pop.src) || c.pop.src}")`);
     pop.classList.add('on');
+    if (!looks.has(c.pop.src)) dress(c.pop.src).then(() => { if (cards[index] === c) placePop(); });
   }
+
+  // The character's look, made once per picture: a bold dark ink outline, a red/cyan colour
+  // fringe on its edges and fine lenticular stripes, like a printed holo sticker.
+  const looks = new Map(), dressing = new Map();
+  function dress(src) {
+    if (!src) return Promise.resolve();
+    if (!dressing.has(src)) dressing.set(src, (async () => {
+      try {
+        const im = new Image();
+        im.src = src;
+        await im.decode();
+        const s = Math.min(1, 900 / Math.max(im.naturalWidth, im.naturalHeight));
+        const w = Math.round(im.naturalWidth * s), h = Math.round(im.naturalHeight * s);
+        const ink = Math.max(2, w / 170), fringe = Math.max(2, w / 140), pad = Math.ceil(ink + fringe + 2);
+        const canvasOf = () => Object.assign(document.createElement('canvas'), { width: w + pad * 2, height: h + pad * 2 });
+        // the character's shape in one colour
+        const shape = (colour) => {
+          const c = canvasOf(), x = c.getContext('2d');
+          x.drawImage(im, pad, pad, w, h);
+          x.globalCompositeOperation = 'source-in';
+          x.fillStyle = colour; x.fillRect(0, 0, c.width, c.height);
+          return c;
+        };
+        const out = canvasOf(), o = out.getContext('2d');
+        // colour fringe, offset left and right, under everything
+        o.globalAlpha = 0.75;
+        o.drawImage(shape('rgb(255,40,90)'), fringe, 0);
+        o.drawImage(shape('rgb(0,230,255)'), -fringe, 0);
+        o.globalAlpha = 1;
+        // ink outline: the shape in near-black, spread all round
+        const dark = shape('#160b06');
+        for (let a = 0; a < 16; a++) o.drawImage(dark, Math.cos((a / 16) * Math.PI * 2) * ink, Math.sin((a / 16) * Math.PI * 2) * ink);
+        o.drawImage(im, pad, pad, w, h);
+        // fine vertical stripes, only on the character
+        o.globalCompositeOperation = 'source-atop';
+        for (let x = 0; x < out.width; x += 3) { o.fillStyle = 'rgba(0,0,0,.13)'; o.fillRect(x, 0, 1, out.height); }
+        o.globalCompositeOperation = 'source-over';
+        const url = URL.createObjectURL(await new Promise((ok) => out.toBlob(ok, 'image/png')));
+        looks.set(src, url);
+        // the padding grew the picture: keep the character where it was
+        padFor.set(src, { x: pad / w, y: pad / h });
+      } catch (e) { console.warn('Could not dress the character:', e); }
+    })());
+    return dressing.get(src);
+  }
+  const padFor = new Map(); // src -> padding added on each side, as a fraction of the original size
 
   art.addEventListener('load', () => {
     sizeSparkles();

@@ -168,10 +168,10 @@
         if (mask) {
           await say('Adding the 3D shading…');
           made = fromMask(card, mask, layout);
-        } else { // no outline: fall back to Gemini repainting the card
-          const sep = await fromPhoto(card);
-          await say('Adding the 3D shading…');
-          made = fromSplit(sep, card, layout);
+        } else {
+          // No outline: keep the real card without a pop-out (Gemini's repaint redraws the whole
+          // card and looks nothing like it, so it's only offered as a link)
+          made = fromNothing(card, layout);
         }
         showPlace();
       }
@@ -247,6 +247,19 @@
   // The character cut from the card itself by Gemini's mask, sitting exactly where it was (a
   // touch bigger so it covers its own outline); the hole behind it filled in.
   // masks: { body, fx } from AI.segment; withFx: include the character's own fire/breath.
+  // the card as it is, with nothing popping out (an empty cut-out)
+  function fromNothing(card, layout) {
+    showFx(null);
+    const w = layout?.win ? { l: layout.win.l / 100, t: layout.win.t / 100, r: layout.win.r / 100, b: layout.win.b / 100 } : P.findWindow(card);
+    const glitter = P.glitterFor(card, w);
+    setHolo(glitter.kind);
+    return {
+      card, char: Object.assign(document.createElement('canvas'), { width: 4, height: 4 }), win: pct(w), hues: glitter.hues,
+      pos: { w: 1, l: 0, t: 0 }, ambience: layout?.ambience || null, photoCard: card, layout,
+      message: "Couldn't outline the character this time, so it won't pop out. Save as it is, or try adding it again.",
+    };
+  }
+
   function fromMask(card, masks, layout, withFx = true) {
     let mask = masks.body;
     if (withFx && masks.fx) {
@@ -374,6 +387,20 @@
     });
   }
 
+  // "whole card is art" switch: the art window becomes the whole card (full-art cards), or
+  // back to the box found on the card
+  function showFull() {
+    const w = made.win, full = w.l <= 0.5 && w.t <= 0.5 && w.r >= 99.5 && w.b >= 99.5;
+    $('fullToggle').setAttribute('aria-checked', full);
+  }
+  $('fullToggle').onclick = () => {
+    if (!made) return;
+    const w = made.win, full = w.l <= 0.5 && w.t <= 0.5 && w.r >= 99.5 && w.b >= 99.5;
+    if (full) made.win = made.boxWin || pct(P.findWindow(made.card));
+    else { made.boxWin = { ...w }; made.win = { l: 0, t: 0, r: 100, b: 100 }; }
+    showFull(); render();
+  };
+
   // ---------- step 2: check and adjust ----------
   const place = $('place'), placeChar = $('placeChar'), winBox = $('win'), size = $('charSize');
 
@@ -381,6 +408,9 @@
     $('placeArt').src = made.card.toDataURL('image/jpeg', 0.9);
     placeChar.src = made.char.toDataURL('image/png');
     $('redoBest').hidden = !made.photoCard; // only for cards Gemini separated
+    $('placeMsg').textContent = made.message || '';
+    $('placeMsg').hidden = !made.message;
+    showFull();
     size.value = Math.round(made.pos.w);
     $('stepWork').hidden = true; $('stepPlace').hidden = false;
     requestAnimationFrame(render);

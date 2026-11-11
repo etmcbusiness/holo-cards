@@ -51,7 +51,8 @@ window.HoloAI = (() => {
             : new Error(`Gemini says: ${msg.split('\n')[0]}`);
           continue;
         }
-        throw new Error(msg);
+        lastErr = new Error(msg); // a setting this model doesn't take, a busy server…: try the next one
+        continue;
       }
       const c = json.candidates?.[0];
       return { parts: c?.content?.parts || [], grounding: c?.groundingMetadata };
@@ -158,8 +159,10 @@ window.HoloAI = (() => {
       ? { t: b[0] / 10, l: b[1] / 10, b: b[2] / 10, r: b[3] / 10 } : null);
     // full art only when the picture box really covers the card (the flag alone has been wrong)
     let win = pct(r.art);
-    if (win && win.b - win.t > (r.full_art ? 65 : 85)) win = { l: 0, t: 0, r: 100, b: 100 };
-    return { win, char: pct(r.character), ambience: AMBIENCE.includes(r.ambience) ? r.ambience : null };
+    const char = pct(r.character);
+    const full = win && (win.b - win.t > (r.full_art ? 65 : 85) || (r.full_art && char && char.b > win.b + 12));
+    if (full) win = { l: 0, t: 0, r: 100, b: 100 };
+    return { win, char, fullArt: !!full, ambience: AMBIENCE.includes(r.ambience) ? r.ambience : null };
   }
 
   // Exactly which pixels are the character: Gemini's segmentation masks, drawn into canvases the
@@ -174,14 +177,32 @@ window.HoloAI = (() => {
     'lightning, water or scenery are not the character. Not the card frame, text or symbols either. ' +
     'Output a JSON list of segmentation masks where each entry contains the 2D bounding box in the key "box_2d", ' +
     'the segmentation mask in key "mask", and the text label in the key "label".';
+  const SEGMENT_MODELS = ['gemini-2.5-flash', ...VISION_MODELS.filter((m) => m !== 'gemini-2.5-flash')];
   async function segment(card) {
-    const { parts } = await call(VISION_MODELS, (m) => ({
-      contents: [{ parts: [{ text: SEGMENT }, jpeg(card)] }],
-      generationConfig: { thinkingConfig: noThinking(m), responseMimeType: 'application/json' },
-    }));
+    for (const m of SEGMENT_MODELS) {
+      let parts;
+      try {
+        ({ parts } = await call([m], {
+          contents: [{ parts: [{ text: SEGMENT }, jpeg(card)] }],
+          generationConfig: { thinkingConfig: noThinking(m), responseMimeType: 'application/json', maxOutputTokens: 32768 },
+        }));
+      } catch (e) {
+        if (e instanceof KeyError) throw e;
+        continue;
+      }
+      const got = await masksFrom(parts, card);
+      if (got) return got;
+    }
+    return null;
+  }
+  async function masksFrom(parts, card) {
     const text = parts.map((p) => p.text || '').join('');
     let list;
     try { list = JSON.parse(text.replace(/^```(json)?|```$/g, '')); } catch { const m = text.match(/\[[\s\S]*\]/); try { list = m && JSON.parse(m[0]); } catch {} }
+    if (!list) { // cut off part way: keep every entry that came through whole
+      list = [];
+      for (const e of text.match(/\{[^{}]*"box_2d"[^{}]*\}/g) || []) { try { list.push(JSON.parse(e)); } catch {} }
+    }
     if (!Array.isArray(list)) list = list ? [list] : [];
     const W = card.width, H = card.height;
     const layer = () => Object.assign(document.createElement('canvas'), { width: W, height: H });

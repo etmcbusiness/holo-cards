@@ -10,15 +10,16 @@ window.HoloBulk = (() => {
   const items = []; // { id, file, name, status: 'waiting'|'working'|'failed', error, thumb }
   let added = 0, running = 0, paused = '';
 
-  const put = (it) => store().req('readwrite', (s) => s.put({ id: it.id, file: it.file, name: it.name, status: it.status === 'working' ? 'waiting' : it.status, error: it.error || '' }));
+  const put = (it) => store().req('readwrite', (s) => s.put({ id: it.id, file: it.file, corners: it.corners || null, name: it.name, status: it.status === 'working' ? 'waiting' : it.status, error: it.error || '' }));
   const drop = (it) => store().req('readwrite', (s) => s.delete(it.id));
   const thumbOf = (it) => (it.thumb ??= URL.createObjectURL(it.file));
 
-  async function enqueue(files) {
+  // jobs: [{ file, corners }] (corners: the crop checked by the user, 0-1000 of the photo)
+  async function enqueue(jobs) {
     paused = '';
     const base = Date.now();
-    for (const [i, f] of files.entries()) {
-      const it = { id: `q:${base}-${String(i).padStart(3, '0')}`, file: f, name: f.name || `Photo ${i + 1}`, status: 'waiting' };
+    for (const [i, { file: f, corners }] of jobs.entries()) {
+      const it = { id: `q:${base}-${String(i).padStart(3, '0')}`, file: f, corners, name: f.name || `Photo ${i + 1}`, status: 'waiting' };
       items.push(it);
       await put(it).catch((e) => console.warn('Could not keep the queued photo:', e));
     }
@@ -41,7 +42,7 @@ window.HoloBulk = (() => {
     it.status = 'working'; running++;
     render();
     try {
-      await store().autoAdd(new File([it.file], it.name, { type: it.file.type || 'image/jpeg' }));
+      await store().autoAdd(new File([it.file], it.name, { type: it.file.type || 'image/jpeg' }), it.corners);
       added++;
       items.splice(items.indexOf(it), 1);
       if (it.thumb) URL.revokeObjectURL(it.thumb);
@@ -134,7 +135,7 @@ window.HoloBulk = (() => {
   // whatever was still queued when the app was last closed
   setTimeout(() => {
     store().req('readonly', (s) => s.getAll()).then((recs) => {
-      for (const r of recs) if (r.id.startsWith('q:')) items.push({ id: r.id, file: r.file, name: r.name, status: r.status === 'failed' ? 'failed' : 'waiting', error: r.error });
+      for (const r of recs) if (r.id.startsWith('q:')) items.push({ id: r.id, file: r.file, corners: r.corners, name: r.name, status: r.status === 'failed' ? 'failed' : 'waiting', error: r.error });
       items.sort((a, b) => (a.id < b.id ? -1 : 1));
       render();
       pump();

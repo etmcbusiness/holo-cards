@@ -77,6 +77,7 @@
 
   const pickPhoto = () => { $('fileCard').value = ''; $('fileCard').click(); };
   function close() {
+    editing = null;
     editor.hidden = true;
     document.body.classList.remove('editing');
   }
@@ -150,13 +151,31 @@
   $('keyCancel').onclick = () => { $('stepKey').hidden = true; close(); };
 
   let pending = null; // the photo being processed, kept so a new key can retry it
-  // one photo: step by step with the user; several: queued and added in the background (bulk.js)
+  // One photo: step by step with the user. Several: the user checks each crop, one after the
+  // other ("3 of 20"); everything else then happens in the background (bulk.js).
   $('fileCard').onchange = async (e) => {
     const files = [...e.target.files];
     if (files.length === 1) return build(files[0]);
-    if (!files.length) return;
-    if (!AI.getKey()) { await askForKey(); close(); }
-    window.HoloBulk.enqueue(files);
+    if (!files.length || busy) return;
+    busy = true;
+    try {
+      if (!AI.getKey()) await askForKey();
+      const jobs = [];
+      for (const [i, f] of files.entries()) {
+        await say(`Opening photo ${i + 1} of ${files.length}…`);
+        const img = await P.loadImage(f).catch(() => null);
+        if (!img) continue;
+        const corners = await askCrop(img, [[0, 0], [1000, 0], [1000, 1000], [0, 1000]], 63 / 88,
+          { label: `Check the crop · ${i + 1} of ${files.length}`, skip: 'Skip this one' });
+        URL.revokeObjectURL(img.src);
+        if (corners === 'stop') break;
+        if (corners) jobs.push({ file: f, corners });
+      }
+      close();
+      if (jobs.length) window.HoloBulk.enqueue(jobs);
+    } finally {
+      busy = false;
+    }
   };
 
   // Gemini reads the card (name, set, grade…) and finds the art window; both skipped without a key
@@ -179,7 +198,8 @@
 
   // A photo added with nobody watching (bulk.js): Gemini's corners for the crop (else the whole
   // photo), Gemini's reading for the details and grade, then saved like the Save button does.
-  async function autoAdd(file) {
+  // corners: the crop the user checked (0-1000 of the photo), else Gemini's guess
+  async function autoAdd(file, checked = null) {
     const img = await P.loadImage(file);
     const split = P.splitLayered(img);
     let info, made;
@@ -189,11 +209,12 @@
     } else {
       info = await identify(P.fit(img, 1600));
       const four = Array.isArray(info?.corners) && info.corners.length === 4 && info.corners.every((p) => p?.length === 2);
-      const corners = four ? info.corners : [[0, 0], [1000, 0], [1000, 1000], [0, 1000]];
+      const corners = checked || (four ? info.corners : [[0, 0], [1000, 0], [1000, 1000], [0, 1000]]);
       made = await cutAndPlace(P.straighten(img, corners, ratioFor(info)));
     }
     const g = gradeFrom(info || {});
     return saveRecord(made, {
+      photo: await P.toBlob(P.fit(img, 1600), 'image/jpeg', 0.85),
       name: info?.name || file.name.replace(/\.[a-z0-9]+$/i, ''),
       info: Object.fromEntries(Object.keys(INFO_FIELDS).map((k) => [k, info?.[k] || ''])),
       kind: FOILS.includes(info?.foil) ? info.foil : made.kind,
@@ -204,11 +225,12 @@
 
   async function build(f) {
     if (busy) return;
-    busy = true; made = null; pending = f;
+    busy = true; made = null; pending = f; editing = null;
     try {
       fillInfo({});
       await say('Looking at the photo…');
       const img = await P.loadImage(f);
+      photoBlob = await P.toBlob(P.fit(img, 1600), 'image/jpeg', 0.85);
       // Already split (card + cut-out side by side)? No image AI needed.
       const split = P.splitLayered(img);
       let info;
@@ -406,7 +428,12 @@
   // ---------- check the crop: four draggable corners over the photo ----------
   // corners on a 0-1000 scale of the photo (top-left, top-right, bottom-right, bottom-left);
   // resolves with the checked corners, or null on Cancel.
-  function askCrop(img, corners, ratio) {
+  // opts: { label: the heading, skip: text for the left button (bulk: skip this photo) }; the
+  // left button resolves null, and with `skip` there's also "Stop" ('stop')
+  function askCrop(img, corners, ratio, opts = {}) {
+    $('cropTitle').textContent = opts.label || 'Check the crop';
+    $('cropCancel').textContent = opts.skip || 'Cancel';
+    $('cropStop').hidden = !opts.skip;
     const W = img.naturalWidth || img.width, H = img.naturalHeight || img.height;
     if (!corners) { // no guess: a card-shaped box in the middle
       const h = Math.min(800, (800 * W) / (ratio * H)), w = (h * ratio * H) / W;
@@ -418,6 +445,8 @@
     $('stepWork').hidden = true; $('stepPlace').hidden = true; $('stepKey').hidden = true; $('stepCrop').hidden = false;
     const box = $('crop'), dots = [...box.querySelectorAll('.dot')];
     $('cropImg').src = P.fit(img, 1400).toDataURL('image/jpeg', 0.85);
+    // the whole photo fits on screen, however tall it is (a phone screenshot pushed the bottom dots off it)
+    box.style.width = `min(100%, calc((100svh - 280px) * ${(W / H).toFixed(4)}))`;
     const draw = () => {
       dots.forEach((d, i) => { d.style.left = `${pts[i][0] / 10}%`; d.style.top = `${pts[i][1] / 10}%`; });
       const r = box.getBoundingClientRect();
@@ -438,6 +467,7 @@
     return new Promise((ok) => {
       $('cropOk').onclick = () => { $('stepCrop').hidden = true; ok(pts); };
       $('cropCancel').onclick = () => { $('stepCrop').hidden = true; ok(null); };
+      $('cropStop').onclick = () => { $('stepCrop').hidden = true; ok('stop'); };
     });
   }
 
@@ -461,7 +491,9 @@
   function showPlace() {
     $('placeArt').src = made.card.toDataURL('image/jpeg', 0.9);
     placeChar.src = made.char.toDataURL('image/png');
-    $('redoBest').hidden = !made.photoCard; // only for cards Gemini separated
+    $('redoBest').hidden = !made.photoCard || !!editing; // only for cards Gemini separated
+    $('recrop').hidden = !editing?.photo; // only when the original photo was kept
+    if (!editing) $('savePlace').textContent = 'Save card';
     showFx(made.fx ?? null);
     $('placeMsg').textContent = made.message || '';
     $('placeMsg').hidden = !made.message;
@@ -529,11 +561,15 @@
     const { pos, win } = made;
     const h = pos.w * (made.char.height / made.char.width) * (made.card.width / made.card.height); // its height in % of the card
     const pop = P.fadeBottom(made.char, (win.b - pos.t) / h);
-    let id = Date.now().toString(36);
-    if (id <= lastId) id = `${lastId}x`; // two saved in the same millisecond (background adds)
-    lastId = id;
+    let id = d.id;
+    if (!id) {
+      id = Date.now().toString(36);
+      if (id <= lastId) id = `${lastId}x`; // two saved in the same millisecond (background adds)
+      lastId = id;
+    }
     const rec = {
       id,
+      photo: d.photo || null, // the original photo (fitted), so the card can be re-cropped later
       name: d.name || `Card ${new Date().toLocaleDateString()}`,
       info: d.info, // game, set, year, number, edition
       art: await P.toBlob(made.card, 'image/jpeg', 0.9),
@@ -546,6 +582,21 @@
     };
     await req('readwrite', (s) => s.put(rec));
     const c = toCard(rec);
+    if (d.replace) { // an edited card: same place in the list, its value and foil kept
+      const old = d.replace, before = window.HoloValue?.get(old) || {};
+      if (app.keyOf(old) !== app.keyOf(c)) { // a built-in card becomes a saved one
+        for (const k of ['holo-value', 'holo-kind']) try {
+          const v = localStorage.getItem(`${k}:${app.keyOf(old)}`);
+          if (v !== null) localStorage.setItem(`${k}:${app.keyOf(c)}`, v);
+        } catch {}
+      }
+      try { localStorage.setItem(`holo-kind:${app.keyOf(c)}`, d.kind); } catch {}
+      window.HoloValue?.setGrade(c, d.grade);
+      if (d.grade.grader !== before.grader || String(d.grade.grade) !== String(before.grade || '')) window.HoloValue?.lookup(c).catch(() => {});
+      app.replace(old, c);
+      if (old.id) { URL.revokeObjectURL(old.art); URL.revokeObjectURL(old.pop.src); }
+      return c;
+    }
     // its grade, then look up what it sells for at that grade (value.js)
     window.HoloValue?.start(c, { ...d.grade, foil: d.kind });
     app.add(c, d.select);
@@ -557,14 +608,87 @@
     btn.disabled = true; btn.textContent = 'Saving…';
     try {
       await saveRecord(made, {
-        name: $('cardName').value.trim(), info: readInfo(), kind: holoKind, select: true,
+        name: $('cardName').value.trim(), info: readInfo(), kind: holoKind, select: true, photo: editing?.photo || photoBlob,
         grade: { grader: $('cardGrader').value, grade: $('cardGrade').value.trim(), ...gradeExtra },
+        ...(editing ? { id: editing.c.id || undefined, replace: editing.c } : {}),
       });
+      editing = null;
       close();
     } catch (err) {
       alert(`Could not save the card: ${err.message}`);
     } finally {
-      btn.disabled = false; btn.textContent = 'Save card';
+      btn.disabled = false; btn.textContent = editing ? 'Save changes' : 'Save card';
+    }
+  };
+
+  // ---------- edit a saved card: the same adjust screen, loaded with the card ----------
+  let editing = null, photoBlob = null; // editing: { c, photo }
+  const canvasFrom = async (src) => {
+    const im = new Image(); im.src = src; await im.decode();
+    const cv = Object.assign(document.createElement('canvas'), { width: im.naturalWidth, height: im.naturalHeight });
+    cv.getContext('2d', { willReadFrequently: true }).drawImage(im, 0, 0);
+    return cv;
+  };
+  async function openEdit(c) {
+    if (busy || !c) return;
+    busy = true;
+    try {
+      await say('Opening the card…');
+      const rec = c.id ? await req('readonly', (s) => s.get(c.id)) : null;
+      const card = await canvasFrom(c.art);
+      const char = c.pop ? await canvasFrom(c.pop.src) : Object.assign(document.createElement('canvas'), { width: 4, height: 4 });
+      const [l, t, w] = c.pop ? c.pop.box : [0, 0, 1];
+      const hw = c.holo || [8, 10, 84, 38];
+      let kind = c.style || 'holo';
+      try { kind = localStorage.getItem(`holo-kind:${app.keyOf(c)}`) || kind; } catch {}
+      made = {
+        card, char, pos: { l, t, w }, win: { l: hw[0], t: hw[1], r: hw[0] + hw[2], b: hw[1] + hw[3] },
+        hues: c.glitter, ambience: c.ambience || null, kind, fx: null, photoCard: null, layout: null, message: '',
+      };
+      editing = { c, photo: rec?.photo || null };
+      // its details and grade as they are now
+      const v = window.HoloValue?.get(c) || {};
+      $('cardName').value = c.name || '';
+      for (const [k, id] of Object.entries(INFO_FIELDS)) $(id).value = c.info?.[k] || '';
+      $('cardGrader').value = v.grader || 'Raw';
+      $('cardGrade').value = v.grade || '';
+      gradeExtra = v.grader && v.grader !== 'Raw' ? { cert: v.cert || '' } : { estimated: !!v.estimated, note: v.note || '' };
+      $('condNote').textContent = '';
+      setHolo(kind);
+      showPlace();
+      $('savePlace').textContent = 'Save changes';
+    } catch (err) {
+      console.error(err);
+      showWork(err.message || 'Could not open the card.', true);
+    } finally {
+      busy = false;
+    }
+  }
+  $('editCard').onclick = () => openEdit(app.current());
+
+  // re-crop an edited card from its original photo, then cut the character out again
+  $('recrop').onclick = async () => {
+    if (busy || !editing?.photo) return;
+    busy = true;
+    const keep = { name: $('cardName').value, info: readInfo(), grader: $('cardGrader').value, grade: $('cardGrade').value, kind: holoKind };
+    try {
+      const img = await P.loadImage(new File([editing.photo], 'photo.jpg', { type: 'image/jpeg' }));
+      const ratio = ratioFor({ game: keep.info.game });
+      const corners = await askCrop(img, [[0, 0], [1000, 0], [1000, 1000], [0, 1000]], ratio);
+      if (!corners) { showPlace(); return; }
+      await say('Cutting out the character… (about 20 seconds)');
+      made = await cutAndPlace(P.straighten(img, corners, ratio));
+      showPlace();
+    } catch (err) {
+      console.error(err);
+      showWork(err.message || 'Something went wrong.', true);
+    } finally {
+      $('cardName').value = keep.name;
+      for (const [k, id] of Object.entries(INFO_FIELDS)) $(id).value = keep.info[k] || '';
+      $('cardGrader').value = keep.grader; $('cardGrade').value = keep.grade;
+      setHolo(keep.kind);
+      $('savePlace').textContent = 'Save changes';
+      busy = false;
     }
   };
 

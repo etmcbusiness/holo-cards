@@ -82,7 +82,7 @@
   function renderControls() {
     $('dots').textContent = `${index + 1} / ${cards.length}`;
     $('prev').hidden = $('next').hidden = cards.length < 2;
-    $('remove').hidden = !cards.length;
+    $('remove').hidden = $('editCard').hidden = !cards.length;
   }
 
   // used by editor.js
@@ -105,6 +105,14 @@
       show(Math.min(index, cards.length - 1));
     },
     go: (i) => show(i),
+    // an edited card takes the old one's place (editor.js)
+    replace(old, c) {
+      const i = cards.indexOf(old);
+      if (i < 0) { cards.push(c); show(cards.length - 1); return; }
+      cards[i] = c;
+      if (!old.id) setHidden([...hidden(), keyOf(old)]); // a built-in card edited: the saved copy replaces it
+      show(i);
+    },
     refresh: () => show(index), // after edits to the card shown
   };
 

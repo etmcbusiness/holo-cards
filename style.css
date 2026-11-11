@@ -234,7 +234,8 @@ body.editing .value-btn { display: none; }
   box-shadow: 0 6px 18px -8px rgba(74, 95, 240, .8);
 }
 .controls #add span { font-size: 20px; line-height: 1; }
-.controls #remove { width: 48px; color: #ff9a9a; }
+.controls #remove, .controls #editCard { width: 48px; flex: none; }
+.controls #remove { color: #ff9a9a; }
 .pager:has(#prev[hidden]) { display: none; } /* just one card: no pager */
 
 /* ---------- editor & sheets: calmer, labelled, thumb-friendly ---------- */

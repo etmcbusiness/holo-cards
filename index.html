@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Holo Cards">
   <meta name="theme-color" content="#0c0c10">
-  <link rel="stylesheet" href="style.css?v=202611110208">
+  <link rel="stylesheet" href="style.css?v=202611110214">
 </head>
 <body>
   <main class="stage" id="stage">
@@ -50,6 +50,7 @@
       <button id="next" aria-label="Next card"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
     </div>
     <button id="add"><span>+</span> Add card</button>
+    <button id="editCard" aria-label="Edit this card" hidden><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"/></svg></button>
     <button id="remove" aria-label="Remove this card" hidden><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button>
   </nav>
 
@@ -66,7 +67,7 @@
       <button class="big" id="keyCancel">Cancel</button>
     </div>
     <div class="step" id="stepCrop" hidden>
-      <h2 class="center">Check the crop</h2>
+      <h2 class="center" id="cropTitle">Check the crop</h2>
       <p class="hint center">Drag the 4 dots onto the card's corners.</p>
       <div class="crop" id="crop">
         <img id="cropImg" alt="">
@@ -77,6 +78,7 @@
         <button class="big" id="cropCancel">Cancel</button>
         <button class="big primary" id="cropOk">Looks right</button>
       </div>
+      <button class="text-btn" id="cropStop" hidden>Stop here and add the ones checked so far</button>
     </div>
     <div class="step" id="stepWork">
       <div class="spinner" id="spinner"></div>
@@ -122,6 +124,7 @@
         <label class="field"><span>Grade</span><input type="text" id="cardGrade" placeholder="1-10" inputmode="decimal"></label>
         <p class="hint wide" id="condNote"></p>
       </div>
+      <button class="text-btn" id="recrop" hidden>Re-crop the card from the original photo</button>
       <button class="text-btn" id="redoBest">Character not right? Try Gemini’s repaint instead</button>
 
       <div class="actions">
@@ -223,7 +226,7 @@
   <!-- newest version: this page may be cached for ~10 min, so check version.txt and reload -->
   <script id="build">
     (function () {
-      var BUILD = '202611110208';
+      var BUILD = '202611110214';
       fetch('version.txt?' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (v) {
         v = (v || '').trim();
         if (v && v !== BUILD && sessionStorage.getItem('holo-reloaded') !== v) {
@@ -233,13 +236,13 @@
       }).catch(function () {});
     })();
   </script>
-  <script src="cards.js?v=202611110208"></script>
-  <script src="process.js?v=202611110208"></script>
-  <script src="ai.js?v=202611110208"></script>
-  <script src="value.js?v=202611110208"></script>
-  <script src="app.js?v=202611110208"></script>
-  <script src="editor.js?v=202611110208"></script>
-  <script src="bulk.js?v=202611110208"></script>
-  <script src="collection.js?v=202611110208"></script>
+  <script src="cards.js?v=202611110214"></script>
+  <script src="process.js?v=202611110214"></script>
+  <script src="ai.js?v=202611110214"></script>
+  <script src="value.js?v=202611110214"></script>
+  <script src="app.js?v=202611110214"></script>
+  <script src="editor.js?v=202611110214"></script>
+  <script src="bulk.js?v=202611110214"></script>
+  <script src="collection.js?v=202611110214"></script>
 </body>
 </html>

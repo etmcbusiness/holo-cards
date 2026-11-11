@@ -652,5 +652,13 @@ window.HoloProcess = (() => {
     return out;
   }
 
-  return { maskCut, inpaint, loadImage, fit, cutout, cropCard, straighten, splitLayered, locate, findWindow, glitterFor, stylize, fadeBottom, toBlob };
+  // does the card have a lot of green in it (then the cut-out uses magenta as its flat colour)?
+  function mostlyGreen(card) {
+    const c = scaled(card, 120), d = pixels(c);
+    let n = 0;
+    for (let k = 0; k < d.length; k += 4) if (d[k + 1] > d[k] + 40 && d[k + 1] > d[k + 2] + 40) n++;
+    return n / (d.length / 4) > 0.03;
+  }
+
+  return { mostlyGreen, maskCut, inpaint, loadImage, fit, cutout, cropCard, straighten, splitLayered, locate, findWindow, glitterFor, stylize, fadeBottom, toBlob };
 })();

@@ -158,12 +158,14 @@
         const ratio = /yu-?gi-?oh/i.test(info?.game || '') ? 59 / 86 : 63 / 88;
         const corners = await askCrop(img, ok ? info.corners : null, ratio);
         if (!corners) { close(); return; }
-        await say('Finding the character…');
         const card = P.straighten(img, corners, ratio);
-        // Gemini outlines the character; it's cut from the card's own pixels (nothing redrawn)
+        // Gemini marks which pixels are the character; it's cut from the card's own pixels (nothing redrawn)
+        await say('Cutting out the character… (about 20 seconds)');
         const [layout, mask] = await Promise.all([
           inspect(card),
-          AI.segment(card).catch((e) => { console.warn('Could not outline the character:', e); return null; }),
+          AI.cutMask(card, P.mostlyGreen(card) ? 'magenta' : 'green')
+            .then((m) => m && { body: m, fx: null })
+            .catch((e) => { if (e instanceof AI.KeyError) throw e; console.warn('Could not cut out the character:', e); return null; }),
         ]);
         if (mask) {
           await say('Adding the 3D shading…');
@@ -246,7 +248,7 @@
 
   // The character cut from the card itself by Gemini's mask, sitting exactly where it was (a
   // touch bigger so it covers its own outline); the hole behind it filled in.
-  // masks: { body, fx } from AI.segment; withFx: include the character's own fire/breath.
+  // masks: { body, fx } (fx: the character's own fire, kept separately when known; null otherwise); withFx: include the character's own fire/breath.
   // the card as it is, with nothing popping out (an empty cut-out)
   function fromNothing(card, layout) {
     showFx(null);

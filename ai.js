@@ -6,8 +6,8 @@
 //                     read from the photo (one cheap text call)
 //   inspect(flatCard) -> { win, char, ambience }: where the art window and the character are
 //                     (one cheap text call on the straightened card)
-//   segment(flatCard) -> { body, fx }: masks of exactly which pixels are the character, and its
-//                     own fire/breath/effects (no image is redrawn, so the cut-out is the card's own pixels)
+//   cutMask(flatCard) -> a mask of exactly which pixels are the character (Nano Banana paints the
+//                     rest one flat colour; the cut-out itself is the card's own pixels)
 //   value(details)  -> recent sold prices for that card at that grade (text call with Google Search)
 window.HoloAI = (() => {
   const KEY = 'holo-gemini-key';
@@ -16,12 +16,16 @@ window.HoloAI = (() => {
     fast: ['gemini-3.1-flash-lite-image', 'gemini-2.5-flash-image', 'gemini-3.1-flash-image'],
     best: ['gemini-nano-banana-2.1', 'gemini-3.1-flash-image', 'gemini-3-pro-image'], // for retries: costs more
   };
-  const TEXT_MODELS = ['gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemini-2.5-flash'];
-  // looking closely (art window, character outline): the Flash models, which are trained for
-  // boxes and masks; Lite misjudged where the art window is
-  const VISION_MODELS = ['gemini-3.8-flash', 'gemini-3.1-flash', 'gemini-2.5-flash'];
-  // thinking off gives better boxes and masks (2.5 and 3.x spell it differently)
-  const noThinking = (m) => (m.startsWith('gemini-2.5') ? { thinkingBudget: 0 } : { thinkingLevel: 'minimal' });
+  // (checked against a real key on 2026-11-10: 2.5 Flash is closed to new users, there is no
+  // 3.1 Flash, and 3.8 Flash refuses thinking level "minimal")
+  const TEXT_MODELS = ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemini-3.8-flash'];
+  // finding boxes on the card (art window, character): all of these got it right in ~2 s
+  const VISION_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-3.5-flash'];
+  // less thinking is quicker and no worse for boxes; Lite models take no setting
+  const noThinking = (m) => (/lite/.test(m) ? undefined : { thinkingLevel: 'low' });
+  // cutting the character out: only Nano Banana 2.1 / Pro keep the picture in place; the Flash
+  // image models redraw the character from scratch
+  const CUT_MODELS = ['gemini-nano-banana-2.1', 'gemini-3-pro-image'];
   const URL = (m) => `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`;
 
   const getKey = () => { try { return localStorage.getItem(KEY) || ''; } catch { return ''; } };
@@ -165,83 +169,45 @@ window.HoloAI = (() => {
     return { win, char, fullArt: !!full, ambience: AMBIENCE.includes(r.ambience) ? r.ambience : null };
   }
 
-  // Exactly which pixels are the character: Gemini's segmentation masks, drawn into canvases the
-  // size of the card whose alpha is the mask. The body and the character's own effects (fire it
-  // breathes, the flame on its tail) come back separately, so effects can be switched off; fire
-  // or explosions in the background must not be included at all. null if no body was found.
-  const SEGMENT = 'Give segmentation masks for the main character in this trading card\'s picture. ' +
-    'Use the label "body" for the character itself: the creature or person with its wings, tail, claws, hair and clothes (one entry). ' +
-    'Use the label "effect" for each fire, breath, beam or energy that comes OUT of the character itself, like flame breathed from its mouth ' +
-    'or the flame on the tip of its tail. ' +
-    'Do NOT include the picture background, even where it touches the character: background fire, explosions, lava, smoke, clouds, sky, ' +
-    'lightning, water or scenery are not the character. Not the card frame, text or symbols either. ' +
-    'Output a JSON list of segmentation masks where each entry contains the 2D bounding box in the key "box_2d", ' +
-    'the segmentation mask in key "mask", and the text label in the key "label".';
-  const SEGMENT_MODELS = ['gemini-2.5-flash', ...VISION_MODELS.filter((m) => m !== 'gemini-2.5-flash')];
-  async function segment(card) {
-    for (const m of SEGMENT_MODELS) {
-      let parts;
-      try {
-        ({ parts } = await call([m], {
-          contents: [{ parts: [{ text: SEGMENT }, jpeg(card)] }],
-          generationConfig: { thinkingConfig: noThinking(m), responseMimeType: 'application/json', maxOutputTokens: 32768 },
-        }));
-      } catch (e) {
-        if (e instanceof KeyError) throw e;
-        continue;
-      }
-      const got = await masksFrom(parts, card);
-      if (got) return got;
-    }
-    return null;
-  }
-  async function masksFrom(parts, card) {
-    const text = parts.map((p) => p.text || '').join('');
-    let list;
-    try { list = JSON.parse(text.replace(/^```(json)?|```$/g, '')); } catch { const m = text.match(/\[[\s\S]*\]/); try { list = m && JSON.parse(m[0]); } catch {} }
-    if (!list) { // cut off part way: keep every entry that came through whole
-      list = [];
-      for (const e of text.match(/\{[^{}]*"box_2d"[^{}]*\}/g) || []) { try { list.push(JSON.parse(e)); } catch {} }
-    }
-    if (!Array.isArray(list)) list = list ? [list] : [];
+  // Exactly which pixels are the character: Nano Banana repaints everything except the character
+  // in one flat colour (the card's own picture stays in place), and whatever isn't that colour
+  // is the character. Returns a card-sized canvas whose alpha is the mask, or null.
+  // keyColour 'green', or 'magenta' for cards with a lot of green in them.
+  async function cutMask(card, keyColour = 'green') {
     const W = card.width, H = card.height;
-    const layer = () => Object.assign(document.createElement('canvas'), { width: W, height: H });
-    const body = layer(), fx = layer();
-    let drewBody = false, drewFx = false;
-    for (const e of list) {
-      const isFx = /effect|fire|flame|breath|beam|energy/i.test(e?.label || '');
-      const o = (isFx ? fx : body).getContext('2d', { willReadFrequently: true });
-      const b = e?.box_2d;
-      if (!Array.isArray(b) || b.length !== 4) continue;
-      const x0 = (b[1] / 1000) * W, y0 = (b[0] / 1000) * H, bw = ((b[3] - b[1]) / 1000) * W, bh = ((b[2] - b[0]) / 1000) * H;
-      if (bw < 4 || bh < 4) continue;
-      if (typeof e.mask === 'string' && e.mask.length > 50) {
-        // a probability map (0-255) the size of the box, as a PNG
-        const src = e.mask.startsWith('data:') ? e.mask : `data:image/png;base64,${e.mask}`;
-        const im = await toCanvas(src).catch(() => null);
-        if (!im) continue;
-        const t = Object.assign(document.createElement('canvas'), { width: Math.round(bw), height: Math.round(bh) });
-        const tx = t.getContext('2d', { willReadFrequently: true });
-        tx.drawImage(im, 0, 0, t.width, t.height);
-        const id = tx.getImageData(0, 0, t.width, t.height), d = id.data;
-        for (let k = 0; k < d.length; k += 4) {
-          const p = Math.max(d[k], d[k + 1], d[k + 2]) * (d[k + 3] / 255);
-          d[k] = d[k + 1] = d[k + 2] = 255;
-          d[k + 3] = Math.max(0, Math.min(255, (p - 110) * 4)); // crisp edge from the probability
-        }
-        tx.putImageData(id, 0, 0);
-        o.drawImage(t, x0, y0);
-        if (isFx) drewFx = true; else drewBody = true;
-      } else if (Array.isArray(e.mask) && e.mask.length > 2) {
-        // a polygon of [x, y] on 0-1000 over the whole image
-        o.fillStyle = '#fff';
-        o.beginPath();
-        e.mask.forEach(([x, y], i) => (i ? o.lineTo : o.moveTo).call(o, (x / 1000) * W, (y / 1000) * H));
-        o.fill();
-        if (isFx) drewFx = true; else drewBody = true;
-      }
+    // padded to 3:4 (the closest shape it makes) so it keeps the card's framing
+    const PW = Math.max(W, Math.round(H * 0.75)), PH = Math.max(H, Math.round(W / 0.75)), ox = (PW - W) / 2, oy = (PH - H) / 2;
+    const pad = Object.assign(document.createElement('canvas'), { width: PW, height: PH }), px = pad.getContext('2d');
+    px.fillStyle = '#000'; px.fillRect(0, 0, PW, PH); px.drawImage(card, ox, oy);
+    const hex = keyColour === 'magenta' ? '#FF00FF' : '#00FF00';
+    const prompt = 'Edit this image: keep the main character (the creature or person, with its wings, tail, claws, hair and any fire or breath ' +
+      'coming out of it) exactly as it is, pixel for pixel, at the same size and position. Replace EVERYTHING else (the picture background, ' +
+      `scenery, the card frame, text, symbols and the black border) with solid pure ${keyColour} ${hex}. Do not move, resize, redraw or restyle the character.`;
+    const { parts } = await call(CUT_MODELS, {
+      contents: [{ parts: [{ text: prompt }, jpeg(pad)] }],
+      generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '3:4' } },
+    });
+    const p = parts.find((q) => q.inlineData || q.inline_data);
+    if (!p) return null;
+    const d = p.inlineData || p.inline_data;
+    const shot = await toCanvas(`data:${d.mimeType || d.mime_type || 'image/png'};base64,${d.data}`);
+    // back into the card's frame
+    const full = Object.assign(document.createElement('canvas'), { width: PW, height: PH }), fx = full.getContext('2d', { willReadFrequently: true });
+    fx.drawImage(shot, 0, 0, PW, PH);
+    const id = fx.getImageData(Math.round(ox), Math.round(oy), W, H), px2 = id.data;
+    let on = 0;
+    for (let k = 0; k < px2.length; k += 4) {
+      const r = px2[k], g = px2[k + 1], b = px2[k + 2];
+      const keyness = keyColour === 'magenta' ? Math.min(r, b) - g : g - Math.max(r, b); // how much it is the flat colour
+      const alpha = Math.max(0, Math.min(255, ((90 - keyness) / 50) * 255));
+      px2[k] = px2[k + 1] = px2[k + 2] = 255; px2[k + 3] = alpha;
+      if (alpha > 128) on++;
     }
-    return drewBody ? { body, fx: drewFx ? fx : null } : null;
+    const share = on / (W * H);
+    if (share < 0.01 || share > 0.85) return null; // nothing cut, or the background wasn't replaced
+    const out = Object.assign(document.createElement('canvas'), { width: W, height: H });
+    out.getContext('2d').putImageData(id, 0, 0);
+    return out;
   }
 
   // What has this card sold for lately, at this grade? Gemini searches the web (sold listings,
@@ -279,5 +245,5 @@ window.HoloAI = (() => {
     };
   }
 
-  return { getKey, setKey, layered, identify, inspect, segment, value, KeyError };
+  return { getKey, setKey, layered, identify, inspect, cutMask, value, KeyError };
 })();

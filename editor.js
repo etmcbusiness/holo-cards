@@ -189,10 +189,10 @@
         if (mask) {
           await say('Adding the 3D shading…');
           made = fromMask(card, mask, layout);
-        } else { // no outline: fall back to Gemini repainting the card
-          const sep = await fromPhoto(card);
-          await say('Adding the 3D shading…');
-          made = fromSplit(sep, card, layout);
+        } else {
+          // No outline: keep the real card without a pop-out (Gemini's repaint redraws the whole
+          // card and looks nothing like it, so it's only offered as a button)
+          made = fromNothing(card, layout);
         }
         showPlace();
       }
@@ -312,6 +312,20 @@
     showPlace();
   };
 
+  // the card as it is, with nothing popping out (an empty cut-out)
+  function fromNothing(card, layout) {
+    showFx(null);
+    const w = layout?.win ? { l: layout.win.l / 100, t: layout.win.t / 100, r: layout.win.r / 100, b: layout.win.b / 100 } : P.findWindow(card);
+    const glitter = P.glitterFor(card, w);
+    setHolo(glitter.kind);
+    const char = Object.assign(document.createElement('canvas'), { width: 4, height: 4 });
+    return {
+      card, char, win: pct(w), hues: glitter.hues, pos: { w: 1, l: 0, t: 0 },
+      ambience: layout?.ambience || null, photoCard: card, layout,
+      message: "Couldn't outline the character this time, so it won't pop out. Save as it is, try again, or try Gemini's repaint below.",
+    };
+  }
+
   // A plain photo of a card: one Gemini call returns the card with the character painted
   // out and the character cut out beside it; that's split like a hand-made layered image.
   // quality 'fast' (cheapest model) first; if that result is clearly wrong it retries once
@@ -348,6 +362,7 @@
 
   // copy Gemini's answers and what was done with them, to paste into a bug report
   $('copyDebug').onclick = async () => {
+    $('copyDebug').textContent = 'Copy debug info';
     const text = JSON.stringify({ when: new Date().toISOString(), ua: navigator.userAgent, notes: debugNotes, gemini: AI.log }, null, 1);
     try { await navigator.clipboard.writeText(text); $('copyDebug').textContent = 'Copied! Paste it in the chat'; }
     catch { prompt('Copy this:', text.slice(0, 20000)); }
@@ -378,6 +393,8 @@
     $('placeArt').src = made.card.toDataURL('image/jpeg', 0.9);
     placeChar.src = made.char.toDataURL('image/png');
     $('redoBest').hidden = !made.photoCard; // only for cards Gemini separated
+    $('placeMsg').textContent = made.message || '';
+    $('placeMsg').hidden = !made.message;
     size.value = Math.round(made.pos.w);
     $('stepWork').hidden = true; $('stepPlace').hidden = false;
     requestAnimationFrame(render);

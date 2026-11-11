@@ -40,10 +40,12 @@ window.HoloAI = (() => {
         headers: { 'x-goog-api-key': getKey(), 'Content-Type': 'application/json' },
         body: JSON.stringify(typeof body === 'function' ? body(model) : body),
       });
-      if (r.status === 404) { lastErr = new Error(`${model} not available`); continue; }
+      const ask = (typeof body === 'function' ? body(model) : body).contents?.[0]?.parts?.[0]?.text?.slice(0, 40) || '';
+      if (r.status === 404) { lastErr = new Error(`${model} not available`); log.push({ model, ask, error: 404 }); continue; }
       const json = await r.json().catch(() => ({}));
       if (!r.ok) {
         const msg = json.error?.message || `Gemini error ${r.status}`;
+        log.push({ model, ask, error: `${r.status} ${msg.slice(0, 300)}` });
         if (r.status === 400 && /api key/i.test(msg)) throw new KeyError('That Gemini API key was not accepted.');
         if (r.status === 403) throw new KeyError('That Gemini API key is not allowed to use this.');
         if (r.status === 429) {
@@ -52,13 +54,14 @@ window.HoloAI = (() => {
             : new Error(`Gemini says: ${msg.split('\n')[0]}`);
           continue;
         }
-        throw new Error(msg);
+        // anything else (a setting this model doesn't take, a busy server…): try the next model
+        lastErr = new Error(msg);
+        continue;
       }
       const c = json.candidates?.[0];
       // keep what Gemini said for the debug copy (never the key); images are left out
-      const req = typeof body === 'function' ? body(model) : body;
       log.push({
-        model, ask: (req.contents?.[0]?.parts?.[0]?.text || '').slice(0, 40), finish: c?.finishReason,
+        model, ask, finish: c?.finishReason,
         text: (c?.content?.parts || []).map((p) => p.text || (p.inlineData || p.inline_data ? '[image]' : '')).join('')
           .replace(/[A-Za-z0-9+/=]{300,}/g, (m) => `<${m.length} chars of image data>`).slice(0, 6000),
       });
@@ -186,11 +189,26 @@ window.HoloAI = (() => {
     'lightning, water or scenery are not the character. Not the card frame, text or symbols either. ' +
     'Output a JSON list of segmentation masks where each entry contains the 2D bounding box in the key "box_2d", ' +
     'the segmentation mask in key "mask", and the text label in the key "label".';
+  // each model in turn until one gives a usable outline of the body
   async function segment(card) {
-    const { parts } = await call(VISION_MODELS, (m) => ({
-      contents: [{ parts: [{ text: SEGMENT }, jpeg(card)] }],
-      generationConfig: { thinkingConfig: noThinking(m), responseMimeType: 'application/json' },
-    }));
+    for (const m of VISION_MODELS) {
+      let parts;
+      try {
+        ({ parts } = await call([m], {
+          contents: [{ parts: [{ text: SEGMENT }, jpeg(card)] }],
+          generationConfig: { thinkingConfig: noThinking(m), responseMimeType: 'application/json' },
+        }));
+      } catch (e) {
+        if (e instanceof KeyError) throw e;
+        continue;
+      }
+      const got = await masksFrom(parts, card);
+      if (got) return got;
+      log.push({ model: m, ask: 'segment', error: 'no usable body mask in the answer' });
+    }
+    return null;
+  }
+  async function masksFrom(parts, card) {
     const text = parts.map((p) => p.text || '').join('');
     let list;
     try { list = JSON.parse(text.replace(/^```(json)?|```$/g, '')); } catch { const m = text.match(/\[[\s\S]*\]/); try { list = m && JSON.parse(m[0]); } catch {} }

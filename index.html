@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Holo Cards">
   <meta name="theme-color" content="#0c0c10">
-  <link rel="stylesheet" href="style.css?v=202611110224">
+  <link rel="stylesheet" href="style.css?v=202611110330">
 </head>
 <body>
   <main class="stage" id="stage">
@@ -56,6 +56,8 @@
 
   <!-- add-a-card flow (editor.js): "+ Add card" opens the photo picker straight away -->
   <input type="file" id="fileCard" accept="image/*" multiple hidden>
+  <input type="file" id="fileOwnCard" accept="image/*" hidden>
+  <input type="file" id="fileOwnChar" accept="image/*" hidden>
   <section class="editor" id="editor" hidden>
     <div class="step" id="stepKey" hidden>
       <h2>Connect Gemini (one time)</h2>
@@ -83,6 +85,7 @@
     <div class="step" id="stepWork">
       <div class="spinner" id="spinner"></div>
       <p class="status big" id="pickStatus"></p>
+      <button class="big primary" id="ownCharBtn" hidden>Choose the cut-out</button>
       <button class="big primary" id="retryPick" hidden>Choose another photo</button>
       <button class="big" id="cancelPick">Cancel</button>
     </div>
@@ -188,6 +191,16 @@
     </div>
   </section>
 
+  <!-- "+ Add card": which way (editor.js) -->
+  <div class="sheet-wrap" id="addChoice" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="addTitle">
+      <h2 id="addTitle">Add a card</h2>
+      <button class="big primary" id="addAi">Card photos<small>Gemini cuts the character out · one or many</small></button>
+      <button class="big" id="addOwn">My own cut-out + the card<small>Free · you supply the character cut out, then the card</small></button>
+      <button class="big" id="addCancel">Cancel</button>
+    </div>
+  </div>
+
   <!-- "remove this card?" (editor.js) -->
   <div class="sheet-wrap" id="confirmRemove" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="rmTitle">
@@ -226,7 +239,7 @@
   <!-- newest version: this page may be cached for ~10 min, so check version.txt and reload -->
   <script id="build">
     (function () {
-      var BUILD = '202611110224';
+      var BUILD = '202611110330';
       fetch('version.txt?' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (v) {
         v = (v || '').trim();
         if (v && v !== BUILD && sessionStorage.getItem('holo-reloaded') !== v) {
@@ -236,13 +249,13 @@
       }).catch(function () {});
     })();
   </script>
-  <script src="cards.js?v=202611110224"></script>
-  <script src="process.js?v=202611110224"></script>
-  <script src="ai.js?v=202611110224"></script>
-  <script src="value.js?v=202611110224"></script>
-  <script src="app.js?v=202611110224"></script>
-  <script src="editor.js?v=202611110224"></script>
-  <script src="bulk.js?v=202611110224"></script>
-  <script src="collection.js?v=202611110224"></script>
+  <script src="cards.js?v=202611110330"></script>
+  <script src="process.js?v=202611110330"></script>
+  <script src="ai.js?v=202611110330"></script>
+  <script src="value.js?v=202611110330"></script>
+  <script src="app.js?v=202611110330"></script>
+  <script src="editor.js?v=202611110330"></script>
+  <script src="bulk.js?v=202611110330"></script>
+  <script src="collection.js?v=202611110330"></script>
 </body>
 </html>

@@ -421,3 +421,14 @@ body.editing .grid-btn, body.editing .bulk-pill, body.empty .grid-btn { display:
   padding: 18px 16px 0; border-radius: 22px 22px 0 0; background: #17181e; border-top: 1px solid rgba(255,255,255,.1);
   animation: rise .25s ease;
 }
+
+/* add-a-card choice */
+.sheet button.big small { display: block; margin-top: 3px; font-size: 13px; font-weight: 500; opacity: .75; }
+.sheet button.big.primary { background: linear-gradient(180deg, #4a5ff0, #3446d4); border-color: #6377f5; }
+
+/* bottom bar with Edit as well: everything fits on a small phone */
+.controls { gap: 8px; padding-left: 10px; padding-right: 10px; }
+.pager button { width: 40px; }
+.count { min-width: 44px; font-size: 14px; }
+.controls #add { flex: 1 1 auto; min-width: 0; max-width: 170px; padding: 0 12px; }
+.controls #remove, .controls #editCard { width: 46px; }

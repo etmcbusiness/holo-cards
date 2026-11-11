@@ -88,8 +88,16 @@
     status.textContent = msg;
     $('spinner').hidden = failed;
     $('retryPick').hidden = !failed;
+    $('ownCharBtn').hidden = true;
   }
-  $('add').onclick = pickPhoto;
+  // "+ Add card": photos for Gemini, or the user's own cut-out plus the card
+  const choice = $('addChoice');
+  const closeChoice = () => { choice.hidden = true; };
+  $('add').onclick = () => { choice.hidden = false; };
+  $('addCancel').onclick = closeChoice;
+  choice.onclick = (e) => { if (e.target === choice) closeChoice(); };
+  $('addAi').onclick = () => { closeChoice(); pickPhoto(); };
+  $('addOwn').onclick = () => { closeChoice(); $('fileOwnCard').value = ''; $('fileOwnCard').click(); };
   $('retryPick').onclick = pickPhoto;
   $('cancelPick').onclick = close;
   $('backPlace').onclick = close;
@@ -692,6 +700,83 @@
       busy = false;
     }
   };
+
+  // ---------- own cut-out: the card photo, then the character already cut out ----------
+  // No AI needed: the cut-out is found on the card (matched against the card's pixels), the card
+  // is filled in behind it, and it's the same adjust screen as any other card.
+  let ownCard = null, ownInfo = null;
+  $('fileOwnCard').onchange = async (e) => {
+    const f = e.target.files[0];
+    if (!f || busy) return;
+    busy = true; made = null; editing = null; ownCard = null;
+    try {
+      fillInfo({});
+      await say('Looking at the card…');
+      const img = await P.loadImage(f);
+      photoBlob = await P.toBlob(P.fit(img, 1600), 'image/jpeg', 0.85);
+      const corners = await askCrop(img, [[0, 0], [1000, 0], [1000, 1000], [0, 1000]], 63 / 88);
+      if (!corners) { close(); return; }
+      ownCard = P.straighten(img, corners, 63 / 88);
+      // details from Gemini if it's available (cheap); fine without
+      ownInfo = AI.getKey() ? AI.identify(P.fit(img, 1600)).catch(() => null) : Promise.resolve(null);
+      showWork('Now choose the character, already cut out: a PNG with a see-through background, or the character on a plain or checkered background.');
+      $('spinner').hidden = true;
+      $('ownCharBtn').hidden = false;
+    } catch (err) {
+      console.error(err);
+      showWork(err.message || 'Something went wrong.', true);
+    } finally {
+      busy = false;
+    }
+  };
+  $('ownCharBtn').onclick = () => { $('fileOwnChar').value = ''; $('fileOwnChar').click(); };
+  $('fileOwnChar').onchange = async (e) => {
+    const f = e.target.files[0];
+    if (!f || busy || !ownCard) return;
+    busy = true;
+    try {
+      await say('Lining the character up with the card…');
+      const char = P.cutout(await P.loadImage(f), { minPiece: 0.002 }); // keeps real see-through, else removes a plain/checkered background
+      made = fromOwn(ownCard, char);
+      setHolo(made.kind);
+      const info = await ownInfo;
+      if (info) {
+        fillInfo(info);
+        if (FOILS.includes(info.foil)) setHolo(info.foil);
+      }
+      showPlace();
+    } catch (err) {
+      console.error(err);
+      showWork(err.message || 'Something went wrong.', true);
+      $('ownCharBtn').hidden = false;
+    } finally {
+      busy = false;
+    }
+  };
+
+  // the user's cut-out placed where it is on the card (else centred on the art window), the card
+  // filled in behind it
+  function fromOwn(card, char) {
+    const w = P.findWindow(card), win = pct(w);
+    const hOf = (wPct) => (wPct / 100) * card.width * (char.height / char.width) / card.height * 100;
+    const at = P.locate(card, char);
+    let pos;
+    if (at) pos = { w: at.w * 100, l: at.x * 100, t: at.y * 100 };
+    else {
+      const w1 = (win.r - win.l) * 0.9;
+      pos = { w: w1, l: (win.l + win.r) / 2 - w1 / 2, t: (win.t + win.b) / 2 - hOf(w1) / 2 };
+    }
+    // its shape on the card, for filling in behind it
+    const mask = Object.assign(document.createElement('canvas'), { width: card.width, height: card.height });
+    mask.getContext('2d').drawImage(char, (pos.l / 100) * card.width, (pos.t / 100) * card.height,
+      (pos.w / 100) * card.width, (hOf(pos.w) / 100) * card.height);
+    const glitter = P.glitterFor(card, w);
+    return {
+      kind: glitter.kind, fx: null, card: P.inpaint(card, mask), char: P.stylize(char), win, hues: glitter.hues, pos,
+      ambience: null, photoCard: null, layout: null,
+      message: at ? '' : "Couldn't find this character on the card, so it's in the middle. Drag it into place.",
+    };
+  }
 
   // for bulk.js (background adds) and collection.js (bulk edits)
   window.HoloStore = { req, autoAdd, removeCard, updateCard, askForKey };

@@ -28,3 +28,7 @@ Put the processed images in `cards/` and add an entry to `cards.js` (the comment
 Pick several photos in **+ Add card**. They are queued on the phone and added two at a time in the background while you look through your cards; each appears when it is done. Tap the pill at the top to see the list, retry or remove. Keep the app open: it pauses when you leave and carries on when you come back.
 
 **All** (top left) shows every card with the total value. **Select** several to change their foil, edit details (game, set, year, edition, grade), look values up again, or remove them together.
+
+## Your own cut-out (free)
+
+**+ Add card → My own cut-out + the card**: pick the card photo and crop it, then pick the character already cut out (a see-through PNG, or the character on a plain or checkered background; on iPhone, press and hold the character in Photos to lift it out). The app finds where the character sits on the card, lines it up, fills in the card behind it, and you adjust and save as usual. No AI needed.

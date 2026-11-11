@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Holo Cards">
   <meta name="theme-color" content="#0c0c10">
-  <link rel="stylesheet" href="style.css?v=202611110143">
+  <link rel="stylesheet" href="style.css?v=202611110208">
 </head>
 <body>
   <main class="stage" id="stage">
@@ -40,6 +40,8 @@
   <div class="caption" id="caption"><b></b><span></span></div>
   <button id="valueBtn" class="value-btn" hidden></button>
   <button id="styleBtn" class="style-btn">✨ Holo</button>
+  <button id="gridBtn" class="grid-btn" aria-label="All cards"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg> All</button>
+  <button id="bulkPill" class="bulk-pill" hidden></button>
 
   <nav class="controls">
     <div class="pager">
@@ -52,7 +54,7 @@
   </nav>
 
   <!-- add-a-card flow (editor.js): "+ Add card" opens the photo picker straight away -->
-  <input type="file" id="fileCard" accept="image/*" hidden>
+  <input type="file" id="fileCard" accept="image/*" multiple hidden>
   <section class="editor" id="editor" hidden>
     <div class="step" id="stepKey" hidden>
       <h2>Connect Gemini (one time)</h2>
@@ -129,6 +131,60 @@
     </div>
   </section>
 
+  <!-- cards being added in the background (bulk.js) -->
+  <div class="sheet-wrap" id="bulkSheet" hidden>
+    <div class="sheet bulk" role="dialog" aria-modal="true" aria-labelledby="bulkTitle">
+      <h2 id="bulkTitle">Adding cards</h2>
+      <p class="hint" id="bulkNote"></p>
+      <button class="big primary" id="bulkResume" hidden>Enter Gemini key and carry on</button>
+      <ul class="bulk-list" id="bulkList"></ul>
+      <button class="big" id="bulkClose">Close</button>
+    </div>
+  </div>
+
+  <!-- all cards: grid, select, bulk edits (collection.js) -->
+  <section class="editor collection" id="collection" hidden>
+    <div class="step">
+      <header class="sheet-head">
+        <div><h2 id="colTitle">My cards</h2><p class="hint" id="colTotal"></p></div>
+        <button class="close" id="colDone">Done</button>
+      </header>
+      <div class="col-tools">
+        <button class="text-btn" id="colSelect">Select</button>
+        <button class="text-btn" id="colAll" hidden>All / none</button>
+      </div>
+      <p class="hint center" id="colMsg"></p>
+      <div class="col-grid" id="colGrid"></div>
+      <div class="col-bar" id="colBar" hidden>
+        <b id="colCount"></b>
+        <div class="seg" id="colFoil" aria-label="Set foil">
+          <button data-kind="holo">Holo</button><button data-kind="reverse">Reverse</button><button data-kind="none">None</button>
+        </div>
+        <div class="col-actions">
+          <button id="colEditBtn">Edit details</button>
+          <button id="colValue">Update values</button>
+          <button id="colRemove" class="danger">Remove</button>
+        </div>
+      </div>
+      <div class="col-edit" id="colEdit" hidden>
+        <h3 class="section" id="ceTitle">Edit cards</h3>
+        <p class="hint">Only what you fill in is changed; empty fields stay as they are.</p>
+        <div class="info">
+          <label class="field wide"><span>Game or sport</span><input type="text" id="ceGame"></label>
+          <label class="field wide"><span>Set</span><input type="text" id="ceSet"></label>
+          <label class="field"><span>Year</span><input type="text" id="ceYear" inputmode="numeric"></label>
+          <label class="field"><span>Edition</span><input type="text" id="ceEdition"></label>
+          <label class="field"><span>Graded by</span><select id="ceGrader"><option value="">Keep</option><option value="Raw">Raw</option><option>PSA</option><option>BGS</option><option>CGC</option><option>SGC</option><option>TAG</option><option>Other</option></select></label>
+          <label class="field"><span>Grade</span><input type="text" id="ceGrade" placeholder="1-10" inputmode="decimal"></label>
+        </div>
+        <div class="actions">
+          <button class="big" id="ceCancel">Cancel</button>
+          <button class="big primary" id="ceApply">Apply to selected</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- "remove this card?" (editor.js) -->
   <div class="sheet-wrap" id="confirmRemove" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="rmTitle">
@@ -167,7 +223,7 @@
   <!-- newest version: this page may be cached for ~10 min, so check version.txt and reload -->
   <script id="build">
     (function () {
-      var BUILD = '202611110143';
+      var BUILD = '202611110208';
       fetch('version.txt?' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (v) {
         v = (v || '').trim();
         if (v && v !== BUILD && sessionStorage.getItem('holo-reloaded') !== v) {
@@ -177,11 +233,13 @@
       }).catch(function () {});
     })();
   </script>
-  <script src="cards.js?v=202611110143"></script>
-  <script src="process.js?v=202611110143"></script>
-  <script src="ai.js?v=202611110143"></script>
-  <script src="value.js?v=202611110143"></script>
-  <script src="app.js?v=202611110143"></script>
-  <script src="editor.js?v=202611110143"></script>
+  <script src="cards.js?v=202611110208"></script>
+  <script src="process.js?v=202611110208"></script>
+  <script src="ai.js?v=202611110208"></script>
+  <script src="value.js?v=202611110208"></script>
+  <script src="app.js?v=202611110208"></script>
+  <script src="editor.js?v=202611110208"></script>
+  <script src="bulk.js?v=202611110208"></script>
+  <script src="collection.js?v=202611110208"></script>
 </body>
 </html>

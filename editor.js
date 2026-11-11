@@ -31,7 +31,7 @@
   });
 
   req('readonly', (s) => s.getAll())
-    .then((recs) => recs.filter((r) => !/^ai\d*:/.test(r.id)).forEach((r) => app.add(toCard(r), false))) // ai…: = kept Gemini results
+    .then((recs) => recs.filter((r) => !/^(ai\d*|q):/.test(r.id)).forEach((r) => app.add(toCard(r), false))) // ai…: kept Gemini results, q: queued photos (bulk.js)
     .catch((e) => console.warn('Saved cards unavailable:', e));
 
   // remove: an in-app sheet asks first
@@ -50,12 +50,26 @@
   $('rmYes').onclick = async () => {
     const c = app.current();
     closeSheet();
-    if (!c) return;
-    if (c.id) await req('readwrite', (s) => s.delete(c.id)); // a built-in card is just hidden (app.js)
-    try { localStorage.removeItem(`holo-value:${app.keyOf(c)}`); localStorage.removeItem(`holo-kind:${app.keyOf(c)}`); } catch {}
-    app.removeCurrent();
-    if (c.id) { URL.revokeObjectURL(c.art); URL.revokeObjectURL(c.pop.src); }
+    if (c) await removeCard(c);
   };
+  async function removeCard(c) {
+    if (c.id) await req('readwrite', (s) => s.delete(c.id)); // a built-in card is just hidden (app.js)
+    for (const k of ['holo-value', 'holo-kind', 'holo-edit']) try { localStorage.removeItem(`${k}:${app.keyOf(c)}`); } catch {}
+    app.remove(c);
+    if (c.id) { URL.revokeObjectURL(c.art); URL.revokeObjectURL(c.pop.src); }
+  }
+  // a card's details changed (collection.js bulk edit): saved cards in IndexedDB, built-in ones
+  // as an override in localStorage (app.js applies it on start)
+  async function updateCard(c, patch) {
+    if (patch.name) c.name = patch.name;
+    if (patch.info) c.info = { ...(c.info || {}), ...patch.info };
+    if (c.id) {
+      const rec = await req('readonly', (s) => s.get(c.id));
+      if (rec) await req('readwrite', (s) => s.put({ ...rec, name: c.name, info: c.info }));
+    } else {
+      try { localStorage.setItem(`holo-edit:${app.keyOf(c)}`, JSON.stringify({ name: c.name, info: c.info })); } catch {}
+    }
+  }
 
   // ---------- step 1: "+ Add card" opens the photo picker; then it all happens ----------
   const editor = $('editor'), status = $('pickStatus');
@@ -93,16 +107,25 @@
 
   // card details: filled in from Gemini's reading of the card, editable before saving
   const INFO_FIELDS = { game: 'cardGame', set: 'cardSet', year: 'cardYear', number: 'cardNumber', edition: 'cardEdition' };
+  // grade: the slab's label if it's graded, else Gemini's estimate of its condition
+  function gradeFrom(info) {
+    const g = info.grading || {}, slab = g.company && g.grade;
+    const est = Math.round(Math.min(10, Math.max(1, +info.condition?.grade || 0))) || '';
+    return {
+      grader: slab ? (['PSA', 'BGS', 'CGC', 'SGC', 'TAG'].includes(g.company.toUpperCase()) ? g.company.toUpperCase() : 'Other') : 'Raw',
+      grade: slab ? g.grade : est,
+      extra: slab ? { cert: g.cert || '' } : { estimated: !!est, note: info.condition?.note || '' },
+      note: slab ? '' : est ? `Estimated condition: ${est}/10. ${info.condition?.note || ''}` : '',
+    };
+  }
   function fillInfo(info) {
     $('cardName').value = info.name || '';
     for (const [k, id] of Object.entries(INFO_FIELDS)) $(id).value = info[k] || '';
-    // grade: the slab's label if it's graded, else Gemini's estimate of its condition
-    const g = info.grading || {}, slab = g.company && g.grade;
-    const est = Math.round(Math.min(10, Math.max(1, +info.condition?.grade || 0))) || '';
-    $('cardGrader').value = slab ? (['PSA', 'BGS', 'CGC', 'SGC', 'TAG'].includes(g.company.toUpperCase()) ? g.company.toUpperCase() : 'Other') : 'Raw';
-    $('cardGrade').value = slab ? g.grade : est;
-    gradeExtra = slab ? { cert: g.cert || '' } : { estimated: !!est, note: info.condition?.note || '' };
-    $('condNote').textContent = slab ? '' : est ? `Estimated condition: ${est}/10. ${info.condition?.note || ''}` : '';
+    const g = gradeFrom(info);
+    $('cardGrader').value = g.grader;
+    $('cardGrade').value = g.grade;
+    gradeExtra = g.extra;
+    $('condNote').textContent = g.note;
   }
   let gradeExtra = {};
   const readInfo = () => Object.fromEntries(Object.entries(INFO_FIELDS).map(([k, id]) => [k, $(id).value.trim()]));
@@ -127,7 +150,57 @@
   $('keyCancel').onclick = () => { $('stepKey').hidden = true; close(); };
 
   let pending = null; // the photo being processed, kept so a new key can retry it
-  $('fileCard').onchange = (e) => { const f = e.target.files[0]; if (f) build(f); };
+  // one photo: step by step with the user; several: queued and added in the background (bulk.js)
+  $('fileCard').onchange = async (e) => {
+    const files = [...e.target.files];
+    if (files.length === 1) return build(files[0]);
+    if (!files.length) return;
+    if (!AI.getKey()) { await askForKey(); close(); }
+    window.HoloBulk.enqueue(files);
+  };
+
+  // Gemini reads the card (name, set, grade…) and finds the art window; both skipped without a key
+  const identify = (c) => (AI.getKey() ? AI.identify(c).catch((e) => { if (e instanceof AI.KeyError) throw e; console.warn('Could not identify the card:', e); return null; }) : null);
+  const inspect = (c) => (AI.getKey() ? AI.inspect(c).catch((e) => { console.warn('Could not inspect the card:', e); return null; }) : null);
+  const ratioFor = (info) => (/yu-?gi-?oh/i.test(info?.game || '') ? 59 / 86 : 63 / 88);
+  const FOILS = ['holo', 'reverse', 'none'];
+
+  // The straightened card -> made: Gemini marks which pixels are the character; it's cut from
+  // the card's own pixels (nothing redrawn); without an outline the card stays as it is
+  async function cutAndPlace(card) {
+    const [layout, mask] = await Promise.all([
+      inspect(card),
+      AI.cutMask(card, P.keyColours(card))
+        .then((m) => m && { body: m.mask, fx: null, clean: P.removeText(card, m.image, m.mask) })
+        .catch((e) => { if (e instanceof AI.KeyError) throw e; console.warn('Could not cut out the character:', e); return null; }),
+    ]);
+    return mask ? fromMask(card, mask, layout) : fromNothing(card, layout);
+  }
+
+  // A photo added with nobody watching (bulk.js): Gemini's corners for the crop (else the whole
+  // photo), Gemini's reading for the details and grade, then saved like the Save button does.
+  async function autoAdd(file) {
+    const img = await P.loadImage(file);
+    const split = P.splitLayered(img);
+    let info, made;
+    if (split) {
+      const [i, layout] = await Promise.all([identify(split.card), inspect(split.card)]);
+      info = i; made = fromSplit(split, null, layout);
+    } else {
+      info = await identify(P.fit(img, 1600));
+      const four = Array.isArray(info?.corners) && info.corners.length === 4 && info.corners.every((p) => p?.length === 2);
+      const corners = four ? info.corners : [[0, 0], [1000, 0], [1000, 1000], [0, 1000]];
+      made = await cutAndPlace(P.straighten(img, corners, ratioFor(info)));
+    }
+    const g = gradeFrom(info || {});
+    return saveRecord(made, {
+      name: info?.name || file.name.replace(/\.[a-z0-9]+$/i, ''),
+      info: Object.fromEntries(Object.keys(INFO_FIELDS).map((k) => [k, info?.[k] || ''])),
+      kind: FOILS.includes(info?.foil) ? info.foil : made.kind,
+      grade: { grader: g.grader, grade: String(g.grade || ''), ...g.extra },
+      select: false,
+    });
+  }
 
   async function build(f) {
     if (busy) return;
@@ -136,43 +209,27 @@
       fillInfo({});
       await say('Looking at the photo…');
       const img = await P.loadImage(f);
-      // A cheap text call reads the card's name, set, grade etc. (skipped without a key)
-      const identify = (c) => (AI.getKey() ? AI.identify(c).catch((e) => { console.warn('Could not identify the card:', e); return null; }) : null);
-      // and another finds the art window and the character on the flat card
-      const inspect = (c) => (AI.getKey() ? AI.inspect(c).catch((e) => { console.warn('Could not inspect the card:', e); return null; }) : null);
       // Already split (card + cut-out side by side)? No image AI needed.
       const split = P.splitLayered(img);
       let info;
       if (split) {
         const id = identify(split.card), layout = inspect(split.card);
         made = fromSplit(split, null, await layout);
+        setHolo(made.kind);
         showPlace();
         info = await id;
       } else {
         if (!AI.getKey()) await askForKey();
         await say('Reading the card…');
         info = await identify(P.fit(img, 1600));
-        const ratio = /yu-?gi-?oh/i.test(info?.game || '') ? 59 / 86 : 63 / 88;
+        const ratio = ratioFor(info);
         // the crop starts as the whole picture; the user drags it in to the card (asked for 2026-11-10)
         const corners = await askCrop(img, [[0, 0], [1000, 0], [1000, 1000], [0, 1000]], ratio);
         if (!corners) { close(); return; }
         const card = P.straighten(img, corners, ratio);
-        // Gemini marks which pixels are the character; it's cut from the card's own pixels (nothing redrawn)
         await say('Cutting out the character… (about 20 seconds)');
-        const [layout, mask] = await Promise.all([
-          inspect(card),
-          AI.cutMask(card, P.keyColours(card))
-            .then((m) => m && { body: m.mask, fx: null, clean: P.removeText(card, m.image, m.mask) })
-            .catch((e) => { if (e instanceof AI.KeyError) throw e; console.warn('Could not cut out the character:', e); return null; }),
-        ]);
-        if (mask) {
-          await say('Adding the 3D shading…');
-          made = fromMask(card, mask, layout);
-        } else {
-          // No outline: keep the real card without a pop-out (Gemini's repaint redraws the whole
-          // card and looks nothing like it, so it's only offered as a link)
-          made = fromNothing(card, layout);
-        }
+        made = await cutAndPlace(card);
+        setHolo(made.kind);
         showPlace();
       }
       if (info && made) {
@@ -202,7 +259,6 @@
   // Gemini's art window is used when there is one: on full-art cards the line-finding guess
   // picks some text box instead, and the character got faded off at its bottom edge.
   function fromSplit(split, ref = null, layout = null) {
-    showFx(null); // a ready-made or repainted cut-out has no separate effects
     const card = split.card, hOf = hOfFor(card, split.char);
     const w = layout?.win ? { l: layout.win.l / 100, t: layout.win.t / 100, r: layout.win.r / 100, b: layout.win.b / 100 } : P.findWindow(card);
     const win = pct(w);
@@ -237,8 +293,8 @@
       pos = { w: w1, l: (win.l + win.r) / 2 - w1 / 2, t: (win.t + win.b) / 2 - hOf(w1) / 2 };
     }
     const glitter = P.glitterFor(ref || card, ref && !layout?.win ? P.findWindow(ref) : w);
-    setHolo(ref ? glitter.kind : 'holo'); // a repainted card has lost its foil texture, so only guess from the photo
     return {
+      kind: ref ? glitter.kind : 'holo', fx: null, // a repainted card has lost its foil texture, so only guess from the photo
       card, char: P.stylize(split.char), pos, win, hues: glitter.hues,
       ambience: layout?.ambience || null, photoCard: ref, layout,
     };
@@ -249,11 +305,10 @@
   // masks: { body, fx } (fx: the character's own fire, kept separately when known; null otherwise); withFx: include the character's own fire/breath.
   // the card as it is, with nothing popping out (an empty cut-out)
   function fromNothing(card, layout) {
-    showFx(null);
     const w = layout?.win ? { l: layout.win.l / 100, t: layout.win.t / 100, r: layout.win.r / 100, b: layout.win.b / 100 } : P.findWindow(card);
     const glitter = P.glitterFor(card, w);
-    setHolo(glitter.kind);
     return {
+      kind: glitter.kind, fx: null,
       card, char: Object.assign(document.createElement('canvas'), { width: 4, height: 4 }), win: pct(w), hues: glitter.hues,
       pos: { w: 1, l: 0, t: 0 }, ambience: layout?.ambience || null, photoCard: card, layout,
       message: "Couldn't outline the character this time, so it won't pop out. Save as it is, or try adding it again.",
@@ -267,14 +322,13 @@
       const x = mask.getContext('2d', { willReadFrequently: true });
       x.drawImage(masks.body, 0, 0); x.drawImage(masks.fx, 0, 0);
     }
-    showFx(masks.fx ? withFx : null);
     const char = P.maskCut(masks.clean || card, mask), o = char.offset; // clean: card text taken off the character
     const w = layout?.win ? { l: layout.win.l / 100, t: layout.win.t / 100, r: layout.win.r / 100, b: layout.win.b / 100 } : P.findWindow(card);
     const w0 = (char.width / card.width) * 100, h0 = (char.height / card.height) * 100, w1 = w0; // exactly over itself (app.js undoes the 3D enlargement)
     const cx = (o.x / card.width) * 100 + w0 / 2, cy = (o.y / card.height) * 100 + h0 / 2;
     const glitter = P.glitterFor(card, w);
-    setHolo(glitter.kind);
     return {
+      kind: glitter.kind, fx: masks.fx ? withFx : null,
       card: P.inpaint(card, mask), char: P.stylize(char), win: pct(w), hues: glitter.hues,
       pos: { w: w1, l: cx - w1 / 2, t: cy - h0 / 2 },
       ambience: layout?.ambience || null, photoCard: card, layout, masks, withFx,
@@ -408,6 +462,7 @@
     $('placeArt').src = made.card.toDataURL('image/jpeg', 0.9);
     placeChar.src = made.char.toDataURL('image/png');
     $('redoBest').hidden = !made.photoCard; // only for cards Gemini separated
+    showFx(made.fx ?? null);
     $('placeMsg').textContent = made.message || '';
     $('placeMsg').hidden = !made.message;
     showFull();
@@ -468,31 +523,43 @@
     render();
   };
 
+  // Save a made card: d = { name, info, kind, grade, select }. Returns the new card.
+  let lastId = '';
+  async function saveRecord(made, d) {
+    const { pos, win } = made;
+    const h = pos.w * (made.char.height / made.char.width) * (made.card.width / made.card.height); // its height in % of the card
+    const pop = P.fadeBottom(made.char, (win.b - pos.t) / h);
+    let id = Date.now().toString(36);
+    if (id <= lastId) id = `${lastId}x`; // two saved in the same millisecond (background adds)
+    lastId = id;
+    const rec = {
+      id,
+      name: d.name || `Card ${new Date().toLocaleDateString()}`,
+      info: d.info, // game, set, year, number, edition
+      art: await P.toBlob(made.card, 'image/jpeg', 0.9),
+      pop: await P.toBlob(pop, 'image/png'),
+      box: [pos.l, pos.t, pos.w, h],
+      holo: [win.l, win.t, win.r - win.l, win.b - win.t],
+      glitter: made.hues,
+      style: d.kind, // holo, reverse or none; the ✨ button on the main screen changes it
+      ambience: made.ambience, // the background animation (app.js picks one from the colours when null)
+    };
+    await req('readwrite', (s) => s.put(rec));
+    const c = toCard(rec);
+    // its grade, then look up what it sells for at that grade (value.js)
+    window.HoloValue?.start(c, { ...d.grade, foil: d.kind });
+    app.add(c, d.select);
+    return c;
+  }
+
   $('savePlace').onclick = async () => {
     const btn = $('savePlace');
     btn.disabled = true; btn.textContent = 'Saving…';
     try {
-      const { pos, win } = made, h = charHeightPct();
-      const pop = P.fadeBottom(made.char, (win.b - pos.t) / h);
-      const rec = {
-        id: Date.now().toString(36),
-        name: $('cardName').value.trim() || `Card ${new Date().toLocaleDateString()}`,
-        info: readInfo(), // set, year, number, edition
-        art: await P.toBlob(made.card, 'image/jpeg', 0.9),
-        pop: await P.toBlob(pop, 'image/png'),
-        box: [pos.l, pos.t, pos.w, h],
-        holo: [win.l, win.t, win.r - win.l, win.b - win.t],
-        glitter: made.hues,
-        style: holoKind, // holo, reverse or none; the ✨ button on the main screen changes it
-        ambience: made.ambience, // the background animation (app.js picks one from the colours when null)
-      };
-      await req('readwrite', (s) => s.put(rec));
-      const c = toCard(rec);
-      // its grade, then look up what it sells for at that grade (value.js)
-      window.HoloValue?.start(c, {
-        grader: $('cardGrader').value, grade: $('cardGrade').value.trim(), foil: holoKind, ...gradeExtra,
+      await saveRecord(made, {
+        name: $('cardName').value.trim(), info: readInfo(), kind: holoKind, select: true,
+        grade: { grader: $('cardGrader').value, grade: $('cardGrade').value.trim(), ...gradeExtra },
       });
-      app.add(c, true);
       close();
     } catch (err) {
       alert(`Could not save the card: ${err.message}`);
@@ -500,4 +567,7 @@
       btn.disabled = false; btn.textContent = 'Save card';
     }
   };
+
+  // for bulk.js (background adds) and collection.js (bulk edits)
+  window.HoloStore = { req, autoAdd, removeCard, updateCard, askForKey };
 })();

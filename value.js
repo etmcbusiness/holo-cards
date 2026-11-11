@@ -144,5 +144,7 @@ window.HoloValue = (() => {
     fill();
   };
 
-  return { render, start, get };
+  // collection.js: set the grade on several cards, look a value up again
+  const setGrade = (c, g) => { set(c, { ...get(c), ...g }); refresh(c); };
+  return { render, start, get, setGrade, lookup };
 })();

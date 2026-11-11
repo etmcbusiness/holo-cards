@@ -8,7 +8,12 @@
   const HIDDEN = 'holo-hidden';
   const hidden = () => { try { return JSON.parse(localStorage.getItem(HIDDEN)) || []; } catch { return []; } };
   const setHidden = (list) => { try { list.length ? localStorage.setItem(HIDDEN, JSON.stringify(list)) : localStorage.removeItem(HIDDEN); } catch {} };
-  const cards = window.CARDS.filter((c) => !hidden().includes(keyOf(c)));
+  const cards = window.CARDS.filter((c) => !hidden().includes(keyOf(c))).map((c) => {
+    // details edited on this device (collection.js bulk edit) for a built-in card
+    let e = null;
+    try { e = JSON.parse(localStorage.getItem(`holo-edit:${keyOf(c)}`)); } catch {}
+    return e ? { ...c, name: e.name || c.name, info: { ...(c.info || {}), ...(e.info || {}) } } : c;
+  });
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let index = 0;
 
@@ -90,12 +95,17 @@
     all: () => cards,
     keyOf,
     rerender: () => window.HoloValue?.render(cards[index]),
-    removeCurrent() {
-      const [c] = cards.splice(index, 1);
+    // take any card out of the list (editor.js removeCard)
+    remove(c) {
+      const i = cards.indexOf(c);
+      if (i < 0) return;
+      cards.splice(i, 1);
       if (!c.id) setHidden([...hidden(), keyOf(c)]); // a built-in card: hidden on this device
+      if (i < index) index--;
       show(Math.min(index, cards.length - 1));
-      return c;
     },
+    go: (i) => show(i),
+    refresh: () => show(index), // after edits to the card shown
   };
 
   function placePop() {

@@ -22,3 +22,9 @@ Tap the value under a card. A graded card (PSA, BGS, CGC…) is looked up at its
 ## Adding a built-in card
 
 Put the processed images in `cards/` and add an entry to `cards.js` (the comments there explain each field). No build step; serve the folder with any static server, e.g. `npx http-server`.
+
+## Many cards at once
+
+Pick several photos in **+ Add card**. They are queued on the phone and added two at a time in the background while you look through your cards; each appears when it is done. Tap the pill at the top to see the list, retry or remove. Keep the app open: it pauses when you leave and carries on when you come back.
+
+**All** (top left) shows every card with the total value. **Select** several to change their foil, edit details (game, set, year, edition, grade), look values up again, or remove them together.

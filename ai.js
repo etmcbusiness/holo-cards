@@ -173,17 +173,33 @@ window.HoloAI = (() => {
   // in one flat colour (the card's own picture stays in place), and whatever isn't that colour
   // is the character. Returns a card-sized canvas whose alpha is the mask, or null.
   // keyColour 'green', or 'magenta' for cards with a lot of green in them.
-  async function cutMask(card, keyColour = 'green') {
+  // keys: flat colours to try, best first, as { name, hex, rgb } (process.js keyColours)
+  async function cutMask(card, keys) {
+    // Two cut-outs at once, each with its own flat colour, and only what both kept counts: the
+    // character comes out the same every time, stray bits of background (lettering, swooshes)
+    // don't. If only one works, that one is used; if neither, the Pro model gets one more go.
+    const once = (key, model) => cutOnce(card, key, model).catch((e) => { if (e instanceof KeyError) throw e; console.warn('Cut-out try failed:', e); return null; });
+    const [a, b] = await Promise.all([once(keys[0], CUT_MODELS[0]), once(keys[1] || keys[0], CUT_MODELS[0])]);
+    if (a && b) {
+      const out = Object.assign(document.createElement('canvas'), { width: card.width, height: card.height }), x = out.getContext('2d');
+      x.drawImage(a, 0, 0);
+      x.globalCompositeOperation = 'destination-in'; // keep a only where b is too
+      x.drawImage(b, 0, 0);
+      return out;
+    }
+    return a || b || once(keys[2] || keys[0], CUT_MODELS[1]);
+  }
+  async function cutOnce(card, key, model) {
     const W = card.width, H = card.height;
     // padded to 3:4 (the closest shape it makes) so it keeps the card's framing
     const PW = Math.max(W, Math.round(H * 0.75)), PH = Math.max(H, Math.round(W / 0.75)), ox = (PW - W) / 2, oy = (PH - H) / 2;
     const pad = Object.assign(document.createElement('canvas'), { width: PW, height: PH }), px = pad.getContext('2d');
-    px.fillStyle = '#000'; px.fillRect(0, 0, PW, PH); px.drawImage(card, ox, oy);
-    const hex = keyColour === 'magenta' ? '#FF00FF' : '#00FF00';
+    // padded with the flat colour itself: a black band got kept, and the picture shifted to fit it
+    px.fillStyle = key.hex; px.fillRect(0, 0, PW, PH); px.drawImage(card, ox, oy);
     const prompt = 'Edit this image: keep the main character (the creature or person, with its wings, tail, claws, hair and any fire or breath ' +
       'coming out of it) exactly as it is, pixel for pixel, at the same size and position. Replace EVERYTHING else (the picture background, ' +
-      `scenery, the card frame, text, symbols and the black border) with solid pure ${keyColour} ${hex}. Do not move, resize, redraw or restyle the character.`;
-    const { parts } = await call(CUT_MODELS, {
+      `scenery, the card frame and all text and symbols) with solid pure ${key.name} ${key.hex}. Do not move, resize, redraw or restyle the character.`;
+    const { parts } = await call([model], {
       contents: [{ parts: [{ text: prompt }, jpeg(pad)] }],
       generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '3:4' } },
     });
@@ -195,16 +211,19 @@ window.HoloAI = (() => {
     const full = Object.assign(document.createElement('canvas'), { width: PW, height: PH }), fx = full.getContext('2d', { willReadFrequently: true });
     fx.drawImage(shot, 0, 0, PW, PH);
     const id = fx.getImageData(Math.round(ox), Math.round(oy), W, H), px2 = id.data;
-    let on = 0;
+    let on = 0, flat = 0;
+    const [kr, kg, kb] = key.rgb;
     for (let k = 0; k < px2.length; k += 4) {
-      const r = px2[k], g = px2[k + 1], b = px2[k + 2];
-      const keyness = keyColour === 'magenta' ? Math.min(r, b) - g : g - Math.max(r, b); // how much it is the flat colour
-      const alpha = Math.max(0, Math.min(255, ((90 - keyness) / 50) * 255));
+      const dist = Math.hypot(px2[k] - kr, px2[k + 1] - kg, px2[k + 2] - kb); // how far from the flat colour
+      const alpha = Math.max(0, Math.min(255, ((dist - 80) / 60) * 255));
       px2[k] = px2[k + 1] = px2[k + 2] = 255; px2[k + 3] = alpha;
       if (alpha > 128) on++;
+      if (dist < 60) flat++;
     }
+    // a real cut-out: most of the card became the flat colour, and the character is a sensible size
     const share = on / (W * H);
-    if (share < 0.01 || share > 0.85) return null; // nothing cut, or the background wasn't replaced
+    console.info(`cut-out (${model}, ${key.name}): character ${(share * 100).toFixed(0)}%, flat ${((flat / (W * H)) * 100).toFixed(0)}%`);
+    if (share < 0.01 || share > 0.6 || flat / (W * H) < 0.35) return null;
     const out = Object.assign(document.createElement('canvas'), { width: W, height: H });
     out.getContext('2d').putImageData(id, 0, 0);
     return out;

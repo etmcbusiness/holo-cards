@@ -163,7 +163,7 @@
         await say('Cutting out the character… (about 20 seconds)');
         const [layout, mask] = await Promise.all([
           inspect(card),
-          AI.cutMask(card, P.mostlyGreen(card) ? 'magenta' : 'green')
+          AI.cutMask(card, P.keyColours(card))
             .then((m) => m && { body: m, fx: null })
             .catch((e) => { if (e instanceof AI.KeyError) throw e; console.warn('Could not cut out the character:', e); return null; }),
         ]);

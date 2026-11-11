@@ -303,7 +303,7 @@ window.HoloProcess = (() => {
     try { quad = snapQuad(src, quad); } catch (e) { console.warn('Edge snap failed, using rough corners', e); }
     // pull in a hair so no sliver of the table or screen shows along the edges
     const cx = quad.reduce((s, p) => s + p[0], 0) / 4, cy = quad.reduce((s, p) => s + p[1], 0) / 4;
-    quad = quad.map(([x, y]) => [x + (cx - x) * 0.012, y + (cy - y) * 0.012]);
+    quad = quad.map(([x, y]) => [x + (cx - x) * 0.004, y + (cy - y) * 0.004]);
     const outH = 1200, outW = Math.round(outH * ratio);
     return warp(src, quad, outW, outH);
   }
@@ -315,7 +315,7 @@ window.HoloProcess = (() => {
       const p = (yi * W + xi) * 4;
       return d[p] * 0.3 + d[p + 1] * 0.59 + d[p + 2] * 0.11;
     };
-    const R = Math.hypot(W, H) * 0.03; // how far from the rough line to look
+    const R = Math.hypot(W, H) * 0.012; // how far from the given line to look (further found lines inside full-art pictures)
     const lines = [];
     for (let i = 0; i < 4; i++) {
       const [ax, ay] = quad[i], [bx, by] = quad[(i + 1) % 4];
@@ -652,13 +652,22 @@ window.HoloProcess = (() => {
     return out;
   }
 
-  // does the card have a lot of green in it (then the cut-out uses magenta as its flat colour)?
-  function mostlyGreen(card) {
+  // Flat colours for the cut-out, the ones least used on this card first (a key colour that's
+  // also in the picture gets confused with it)
+  const KEYS = [
+    { name: 'green', hex: '#00FF00', rgb: [0, 255, 0] }, { name: 'magenta', hex: '#FF00FF', rgb: [255, 0, 255] },
+    { name: 'blue', hex: '#0000FF', rgb: [0, 0, 255] }, { name: 'cyan', hex: '#00FFFF', rgb: [0, 255, 255] },
+    { name: 'yellow', hex: '#FFFF00', rgb: [255, 255, 0] },
+  ];
+  function keyColours(card) {
     const c = scaled(card, 120), d = pixels(c);
-    let n = 0;
-    for (let k = 0; k < d.length; k += 4) if (d[k + 1] > d[k] + 40 && d[k + 1] > d[k + 2] + 40) n++;
-    return n / (d.length / 4) > 0.03;
+    const near = KEYS.map((k) => {
+      let n = 0;
+      for (let i = 0; i < d.length; i += 4) if (Math.hypot(d[i] - k.rgb[0], d[i + 1] - k.rgb[1], d[i + 2] - k.rgb[2]) < 170) n++;
+      return { k, n };
+    });
+    return near.sort((a, b) => a.n - b.n).map((x) => x.k);
   }
 
-  return { mostlyGreen, maskCut, inpaint, loadImage, fit, cutout, cropCard, straighten, splitLayered, locate, findWindow, glitterFor, stylize, fadeBottom, toBlob };
+  return { keyColours, maskCut, inpaint, loadImage, fit, cutout, cropCard, straighten, splitLayered, locate, findWindow, glitterFor, stylize, fadeBottom, toBlob };
 })();

@@ -88,8 +88,6 @@
     status.textContent = msg;
     $('spinner').hidden = failed;
     $('retryPick').hidden = !failed;
-    $('freeOutline').hidden = true;
-    $('stepOutline').hidden = true;
   }
   $('add').onclick = pickPhoto;
   $('retryPick').onclick = pickPhoto;
@@ -151,7 +149,6 @@
     keyWaiter?.(); keyWaiter = null;
   };
   $('keyCancel').onclick = () => { $('stepKey').hidden = true; close(); };
-  $('keyFree').onclick = () => { $('stepKey').hidden = true; keyWaiter?.('free'); keyWaiter = null; };
 
   let pending = null; // the photo being processed, kept so a new key can retry it
   // One photo: step by step with the user. Several: the user checks each crop, one after the
@@ -230,11 +227,10 @@
   async function build(f) {
     if (busy) return;
     busy = true; made = null; pending = f; editing = null;
-    let img = null;
     try {
       fillInfo({});
       await say('Looking at the photo…');
-      img = await P.loadImage(f);
+      const img = await P.loadImage(f);
       photoBlob = await P.toBlob(P.fit(img, 1600), 'image/jpeg', 0.85);
       // Already split (card + cut-out side by side)? No image AI needed.
       const split = P.splitLayered(img);
@@ -246,7 +242,7 @@
         showPlace();
         info = await id;
       } else {
-        if (!AI.getKey() && (await askForKey()) === 'free') { busy = false; return freeBuild(img); }
+        if (!AI.getKey()) await askForKey();
         await say('Reading the card…');
         info = await identify(P.fit(img, 1600));
         const ratio = ratioFor(info);
@@ -272,124 +268,9 @@
         return build(pending);
       }
       showWork(err.message || 'Something went wrong.', true);
-      // no Gemini (e.g. credits ran out): the user can outline the character, free
-      if (img && err instanceof AI.StopError) {
-        $('freeOutline').hidden = false;
-        $('freeOutline').onclick = () => freeBuild(img);
-      }
     } finally {
       busy = false;
     }
-  }
-
-  // The free way, no AI at all: the user crops, then draws around the character; it's cut out
-  // of the card's own pixels and the background behind it is filled in and blurred.
-  async function freeBuild(img) {
-    if (busy) return;
-    busy = true;
-    try {
-      fillInfo({});
-      const corners = await askCrop(img, [[0, 0], [1000, 0], [1000, 1000], [0, 1000]], 63 / 88);
-      if (!corners) { close(); return; }
-      const card = P.straighten(img, corners, 63 / 88);
-      const mask = await askOutline(card);
-      if (!mask) { close(); return; }
-      await say('Adding the 3D shading…');
-      made = fromMask(card, { body: mask, fx: null }, null);
-      setHolo(made.kind);
-      showPlace();
-    } catch (err) {
-      console.error(err);
-      showWork(err.message || 'Something went wrong.', true);
-    } finally {
-      busy = false;
-    }
-  }
-
-  // ---------- draw around the character: freehand shapes over the card ----------
-  // Resolves with a card-sized mask canvas (the shapes filled), or null on Cancel. A magnifier
-  // above the finger shows the edge being traced.
-  function askOutline(card) {
-    editor.hidden = false;
-    document.body.classList.add('editing');
-    for (const id of ['stepWork', 'stepPlace', 'stepKey', 'stepCrop']) $(id).hidden = true;
-    $('stepOutline').hidden = false;
-    const box = $('outline'), cv = $('olCanvas'), lp = $('olLoupe');
-    // as big as fits on screen
-    box.style.width = `min(100%, calc((100svh - 300px) * ${(card.width / card.height).toFixed(4)}))`;
-    const shapes = []; // in card pixels
-    let cur = null;
-    const dpr = Math.min(devicePixelRatio || 1, 2);
-    const fitCanvas = () => {
-      const w = box.clientWidth, h = (w * card.height) / card.width;
-      cv.style.height = `${h}px`;
-      cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
-    };
-    const trace = (x, s) => {
-      for (const sh of [...shapes, ...(cur ? [cur] : [])]) {
-        if (sh.length < 2) continue;
-        x.beginPath();
-        sh.forEach(([px, py], i) => (i ? x.lineTo : x.moveTo).call(x, px * s, py * s));
-        if (sh !== cur) { x.closePath(); x.fillStyle = 'rgba(91,111,240,.28)'; x.fill(); }
-        x.strokeStyle = '#ff4f8b'; x.lineWidth = 2.5 * dpr; x.lineJoin = 'round'; x.stroke();
-      }
-    };
-    const draw = () => {
-      const x = cv.getContext('2d'), s = cv.width / card.width;
-      x.clearRect(0, 0, cv.width, cv.height);
-      x.drawImage(card, 0, 0, cv.width, cv.height);
-      trace(x, s);
-    };
-    const loupe = (cx, cy, px, py) => { // px,py: card pixels under the finger
-      const Z = 3, L = lp.width, x = lp.getContext('2d'), s = (cv.width / card.width) * Z;
-      x.save();
-      x.clearRect(0, 0, L, L);
-      x.translate(L / 2 - px * s, L / 2 - py * s);
-      x.drawImage(card, 0, 0, card.width * s, card.height * s);
-      x.lineWidth = 2; trace(x, s);
-      x.restore();
-      x.strokeStyle = '#fff'; x.lineWidth = 1.5;
-      x.beginPath(); x.moveTo(L / 2 - 10, L / 2); x.lineTo(L / 2 + 10, L / 2); x.moveTo(L / 2, L / 2 - 10); x.lineTo(L / 2, L / 2 + 10); x.stroke();
-      lp.hidden = false;
-      lp.style.left = `${cx - 60}px`;
-      lp.style.top = `${Math.max(-40, cy - 150)}px`;
-    };
-    const at = (e) => {
-      const r = cv.getBoundingClientRect();
-      return { cx: e.clientX - r.left, cy: e.clientY - r.top, px: ((e.clientX - r.left) / r.width) * card.width, py: ((e.clientY - r.top) / r.height) * card.height };
-    };
-    cv.onpointerdown = (e) => {
-      e.preventDefault(); cv.setPointerCapture(e.pointerId);
-      const p = at(e); cur = [[p.px, p.py]]; loupe(p.cx, p.cy, p.px, p.py); draw();
-    };
-    cv.onpointermove = (e) => {
-      if (!cur) return;
-      const p = at(e), [lx, ly] = cur[cur.length - 1];
-      if (Math.hypot(p.px - lx, p.py - ly) > card.width / 400) cur.push([p.px, p.py]);
-      loupe(p.cx, p.cy, p.px, p.py); draw();
-    };
-    cv.onpointerup = cv.onpointercancel = () => {
-      if (cur && cur.length > 4) shapes.push(cur);
-      cur = null; lp.hidden = true; draw();
-    };
-    $('olUndo').onclick = () => { shapes.pop(); draw(); };
-    $('olClear').onclick = () => { shapes.length = 0; draw(); };
-    requestAnimationFrame(() => { fitCanvas(); draw(); });
-    return new Promise((ok) => {
-      $('olCancel').onclick = () => { $('stepOutline').hidden = true; ok(null); };
-      $('olDone').onclick = () => {
-        if (!shapes.length) return;
-        $('stepOutline').hidden = true;
-        const m = Object.assign(document.createElement('canvas'), { width: card.width, height: card.height }), x = m.getContext('2d');
-        x.fillStyle = '#fff';
-        for (const sh of shapes) {
-          x.beginPath();
-          sh.forEach(([px, py], i) => (i ? x.lineTo : x.moveTo).call(x, px, py));
-          x.closePath(); x.fill();
-        }
-        ok(m);
-      };
-    });
   }
 
   const hOfFor = (card, char) => (wPct) => (wPct / 100) * card.width * (char.height / char.width) / card.height * 100;
@@ -613,7 +494,6 @@
     placeChar.src = made.char.toDataURL('image/png');
     $('redoBest').hidden = !made.photoCard || !!editing; // only for cards Gemini separated
     $('recrop').hidden = !editing?.photo; // only when the original photo was kept
-    $('drawOutline').hidden = !made.photoCard || !!editing;
     if (!editing) $('savePlace').textContent = 'Save card';
     showFx(made.fx ?? null);
     $('placeMsg').textContent = made.message || '';
@@ -786,24 +666,6 @@
     }
   }
   $('editCard').onclick = () => openEdit(app.current());
-
-  // adjust screen: draw the outline by hand instead (free; fixes a cut-out that came out wrong)
-  $('drawOutline').onclick = async () => {
-    if (busy || !made?.photoCard) return;
-    busy = true;
-    const { photoCard, layout, win } = made, kind = holoKind;
-    try {
-      const mask = await askOutline(photoCard);
-      if (mask) {
-        made = fromMask(photoCard, { body: mask, fx: null }, layout);
-        made.win = win;
-      }
-      showPlace();
-    } finally {
-      setHolo(kind);
-      busy = false;
-    }
-  };
 
   // re-crop an edited card from its original photo, then cut the character out again
   $('recrop').onclick = async () => {

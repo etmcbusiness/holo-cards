@@ -162,7 +162,7 @@
         const [layout, mask] = await Promise.all([
           inspect(card),
           AI.cutMask(card, P.keyColours(card))
-            .then((m) => m && { body: m, fx: null })
+            .then((m) => m && { body: m.mask, fx: null, clean: P.removeText(card, m.image, m.mask) })
             .catch((e) => { if (e instanceof AI.KeyError) throw e; console.warn('Could not cut out the character:', e); return null; }),
         ]);
         if (mask) {
@@ -268,7 +268,7 @@
       x.drawImage(masks.body, 0, 0); x.drawImage(masks.fx, 0, 0);
     }
     showFx(masks.fx ? withFx : null);
-    const char = P.maskCut(card, mask), o = char.offset;
+    const char = P.maskCut(masks.clean || card, mask), o = char.offset; // clean: card text taken off the character
     const w = layout?.win ? { l: layout.win.l / 100, t: layout.win.t / 100, r: layout.win.r / 100, b: layout.win.b / 100 } : P.findWindow(card);
     const w0 = (char.width / card.width) * 100, h0 = (char.height / card.height) * 100, w1 = w0; // exactly over itself (app.js undoes the 3D enlargement)
     const cx = (o.x / card.width) * 100 + w0 / 2, cy = (o.y / card.height) * 100 + h0 / 2;

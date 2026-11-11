@@ -180,12 +180,13 @@ window.HoloAI = (() => {
     // don't. If only one works, that one is used; if neither, the Pro model gets one more go.
     const once = (key, model) => cutOnce(card, key, model).catch((e) => { if (e instanceof KeyError) throw e; console.warn('Cut-out try failed:', e); return null; });
     const [a, b] = await Promise.all([once(keys[0], CUT_MODELS[0]), once(keys[1] || keys[0], CUT_MODELS[0])]);
+    // returns { mask, image }: image is Gemini's picture of the character (used where it took text off)
     if (a && b) {
       const out = Object.assign(document.createElement('canvas'), { width: card.width, height: card.height }), x = out.getContext('2d');
-      x.drawImage(a, 0, 0);
+      x.drawImage(a.mask, 0, 0);
       x.globalCompositeOperation = 'destination-in'; // keep a only where b is too
-      x.drawImage(b, 0, 0);
-      return out;
+      x.drawImage(b.mask, 0, 0);
+      return { mask: out, image: a.image };
     }
     return a || b || once(keys[2] || keys[0], CUT_MODELS[1]);
   }
@@ -198,7 +199,8 @@ window.HoloAI = (() => {
     px.fillStyle = key.hex; px.fillRect(0, 0, PW, PH); px.drawImage(card, ox, oy);
     const prompt = 'Edit this image: keep the main character (the creature or person, with its wings, tail, claws, hair and any fire or breath ' +
       'coming out of it) exactly as it is, pixel for pixel, at the same size and position. Replace EVERYTHING else (the picture background, ' +
-      `scenery, the card frame and all text and symbols) with solid pure ${key.name} ${key.hex}. Do not move, resize, redraw or restyle the character.`;
+      `scenery, the card frame and all text and symbols) with solid pure ${key.name} ${key.hex}. Do not move, resize, redraw or restyle the character. ` +
+      'Where card text, numbers or symbols are printed on top of the character, remove them and fill in the character underneath to match it.';
     const { parts } = await call([model], {
       contents: [{ parts: [{ text: prompt }, jpeg(pad)] }],
       generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '3:4' } },
@@ -210,6 +212,8 @@ window.HoloAI = (() => {
     // back into the card's frame
     const full = Object.assign(document.createElement('canvas'), { width: PW, height: PH }), fx = full.getContext('2d', { willReadFrequently: true });
     fx.drawImage(shot, 0, 0, PW, PH);
+    const image = Object.assign(document.createElement('canvas'), { width: W, height: H });
+    image.getContext('2d').drawImage(full, -Math.round(ox), -Math.round(oy));
     const id = fx.getImageData(Math.round(ox), Math.round(oy), W, H), px2 = id.data;
     let on = 0, flat = 0;
     const [kr, kg, kb] = key.rgb;
@@ -226,7 +230,7 @@ window.HoloAI = (() => {
     if (share < 0.01 || share > 0.6 || flat / (W * H) < 0.35) return null;
     const out = Object.assign(document.createElement('canvas'), { width: W, height: H });
     out.getContext('2d').putImageData(id, 0, 0);
-    return out;
+    return { mask: out, image };
   }
 
   // What has this card sold for lately, at this grade? Gemini searches the web (sold listings,

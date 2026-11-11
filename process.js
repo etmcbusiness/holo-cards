@@ -669,5 +669,41 @@ window.HoloProcess = (() => {
     return near.sort((a, b) => a.n - b.n).map((x) => x.k);
   }
 
-  return { keyColours, maskCut, inpaint, loadImage, fit, cutout, cropCard, straighten, splitLayered, locate, findWindow, glitterFor, stylize, fadeBottom, toBlob };
+  // The card with the text that was printed over the character taken off: where Gemini's
+  // picture of the character differs a lot from the card (it removed text there), use Gemini's
+  // pixels; everywhere else the card's own. Only inside the mask.
+  function removeText(card, image, mask) {
+    const W = card.width, H = card.height;
+    const a = pixels(card), b = pixels(scaled(image, W)), m = pixels(scaled(mask, W));
+    const N = W * H, mark = new Uint8Array(N);
+    for (let k = 0; k < N; k++) {
+      if (m[k * 4 + 3] < 128) continue;
+      const d = Math.abs(a[k * 4] - b[k * 4]) + Math.abs(a[k * 4 + 1] - b[k * 4 + 1]) + Math.abs(a[k * 4 + 2] - b[k * 4 + 2]);
+      if (d > 140) mark[k] = 1;
+    }
+    // grow a little so the edges of the letters go too, and drop lone pixels (noise)
+    const grown = new Uint8Array(N), R = Math.max(2, Math.round(W / 300));
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (!mark[y * W + x]) continue;
+      let n = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) n += mark[Math.min(H - 1, Math.max(0, y + dy)) * W + Math.min(W - 1, Math.max(0, x + dx))];
+      if (n < 3) continue;
+      for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+        const X = x + dx, Y = y + dy;
+        if (X >= 0 && Y >= 0 && X < W && Y < H) grown[Y * W + X] = 1;
+      }
+    }
+    const out = canvasOf(W, H), ox = out.getContext('2d', { willReadFrequently: true }), od = ox.createImageData(W, H);
+    let changed = 0;
+    for (let k = 0; k < N; k++) {
+      const src = grown[k] && m[k * 4 + 3] >= 128 ? b : a;
+      if (src === b) changed++;
+      od.data[k * 4] = src[k * 4]; od.data[k * 4 + 1] = src[k * 4 + 1]; od.data[k * 4 + 2] = src[k * 4 + 2]; od.data[k * 4 + 3] = 255;
+    }
+    ox.putImageData(od, 0, 0);
+    console.info(`text taken off the character: ${((changed / N) * 100).toFixed(1)}% of the card`);
+    return out;
+  }
+
+  return { removeText, keyColours, maskCut, inpaint, loadImage, fit, cutout, cropCard, straighten, splitLayered, locate, findWindow, glitterFor, stylize, fadeBottom, toBlob };
 })();

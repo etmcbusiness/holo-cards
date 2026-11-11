@@ -152,11 +152,9 @@
         if (!AI.getKey()) await askForKey();
         await say('Reading the card…');
         info = await identify(P.fit(img, 1600));
-        // the card's corners: Gemini's guess, checked (and fixed if needed) by the user, then the
-        // card is straightened and cropped exactly (each side snaps onto the card's edge)
-        const ok = Array.isArray(info?.corners) && info.corners.length === 4 && info.corners.every((p) => p?.length === 2);
         const ratio = /yu-?gi-?oh/i.test(info?.game || '') ? 59 / 86 : 63 / 88;
-        const corners = await askCrop(img, ok ? info.corners : null, ratio);
+        // the crop starts as the whole picture; the user drags it in to the card (asked for 2026-11-10)
+        const corners = await askCrop(img, [[0, 0], [1000, 0], [1000, 1000], [0, 1000]], ratio);
         if (!corners) { close(); return; }
         const card = P.straighten(img, corners, ratio);
         // Gemini marks which pixels are the character; it's cut from the card's own pixels (nothing redrawn)
@@ -272,13 +270,13 @@
     showFx(masks.fx ? withFx : null);
     const char = P.maskCut(card, mask), o = char.offset;
     const w = layout?.win ? { l: layout.win.l / 100, t: layout.win.t / 100, r: layout.win.r / 100, b: layout.win.b / 100 } : P.findWindow(card);
-    const w0 = (char.width / card.width) * 100, h0 = (char.height / card.height) * 100, w1 = w0 * 1.03;
+    const w0 = (char.width / card.width) * 100, h0 = (char.height / card.height) * 100, w1 = w0; // exactly over itself (app.js undoes the 3D enlargement)
     const cx = (o.x / card.width) * 100 + w0 / 2, cy = (o.y / card.height) * 100 + h0 / 2;
     const glitter = P.glitterFor(card, w);
     setHolo(glitter.kind);
     return {
       card: P.inpaint(card, mask), char: P.stylize(char), win: pct(w), hues: glitter.hues,
-      pos: { w: w1, l: cx - w1 / 2, t: cy - (h0 * 1.03) / 2 },
+      pos: { w: w1, l: cx - w1 / 2, t: cy - h0 / 2 },
       ambience: layout?.ambience || null, photoCard: card, layout, masks, withFx,
     };
   }

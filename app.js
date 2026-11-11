@@ -110,13 +110,17 @@
     const pd = looks.has(c.pop.src) && padFor.get(c.pop.src);
     if (pd) { l -= w * pd.x; t -= h * pd.y; w *= 1 + pd.x * 2; h *= 1 + pd.y * 2; }
     const W = art.offsetWidth, H = art.offsetHeight;
-    const pw = (w / 100) * W, ph = (h / 100) * H;
-    Object.assign(pop.style, {
-      left: `${x + (l / 100) * W}px`, top: `${y + (t / 100) * H}px`, width: `${pw}px`, height: `${ph}px`,
-    });
+    const pw = (w / 100) * W, ph = (h / 100) * H, px0 = x + (l / 100) * W, py0 = y + (t / 100) * H;
+    // the strips are laid out in the card's own coordinates
+    Object.assign(pop.style, { left: '0px', top: '0px', width: `${card.offsetWidth}px`, height: `${card.offsetHeight}px` });
     // Bend the cut-out onto a shallow cylinder bulging toward the viewer: thin vertical
     // strips, each turned to follow the curve. Face-on it looks flat; as the card tilts
     // the strips foreshorten unevenly, so it reads as a rounded surface.
+    // Anything nearer the viewer looks bigger (perspective), so each strip is shrunk toward the
+    // middle of the view by exactly that much: at rest the character lines up pixel for pixel
+    // with the card underneath (big full-art characters showed ~10% too large, and doubled).
+    const P = parseFloat(getComputedStyle(stage).perspective) || 900, LIFT = 16; // .pop translateZ
+    const ox = card.offsetWidth / 2, oy = card.offsetHeight / 2;                // where the view looks from
     const N = 24, BEND = (32 * Math.PI) / 180;          // half-angle of the curve
     const R = pw / 2 / Math.sin(BEND), slice = pw / N;
     let html = '';
@@ -125,9 +129,10 @@
       const a = Math.asin(cx / R);
       const z = R * (Math.cos(a) - Math.cos(BEND));
       const k = 1 / Math.cos(a);                        // widen so its projection is one slice
-      const sw = slice * k;
-      html += `<i style="left:${cx + pw / 2 - sw / 2 - 1}px;width:${sw + 2}px;` +
-        `background-size:${pw * k}px ${ph}px;background-position:${1 - i * slice * k}px 0;` +
+      const sc = (P - LIFT - z) / P;                    // perspective makes it 1/sc bigger: undo that
+      const sw = slice * k * sc, mid = ox + (px0 + cx + pw / 2 - ox) * sc, top = oy + (py0 - oy) * sc;
+      html += `<i style="left:${mid - sw / 2 - 1}px;top:${top}px;width:${sw + 2}px;height:${ph * sc}px;` +
+        `background-size:${pw * k * sc}px ${ph * sc}px;background-position:${1 - i * slice * k * sc}px 0;` +
         `transform:translateZ(${z.toFixed(2)}px) rotateY(${a.toFixed(4)}rad)"></i>`;
     }
     pop.innerHTML = html;

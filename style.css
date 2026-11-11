@@ -80,7 +80,7 @@ body {
 }
 .pop.on { display: block; }
 .pop i {
-  position: absolute; top: 0; height: 100%;
+  position: absolute;
   background-image: var(--pop-src);
   background-repeat: no-repeat;
   backface-visibility: hidden;
